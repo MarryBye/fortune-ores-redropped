@@ -103,6 +103,13 @@ public class Ore {
 
     public ArrayList<String> oreNames;
     /**
+     * How many leading {@link #oreNames} entries come from the ore's own name; everything after them was added by
+     * {@code FortuneOres#addAlias} and is an alias. Two ores may legitimately share a name that way (Rutile carries
+     * {@code oreTitanium} so it can be processed as titanium), and {@link #isAlias} is what lets the ore owning the
+     * name outright win over the one merely aliasing it.
+     */
+    public int primaryNameCount;
+    /**
      * Explicit smelting targets (e.g. {@code quicksilver} for Cinnabar), checked before anything derived from the
      * ore's own name, in the order they were added.
      */
@@ -141,8 +148,17 @@ public class Ore {
     }
 
     public void addOreName(String name) {
+        // The first name an ore is given is always its own (both addUniversalOre and addVanillaOre start with it);
+        // every later one comes from addAlias.
+        if (oreNames.isEmpty()) primaryNameCount = 2;
+
         oreNames.add("ore" + name);
         oreNames.add("oreNether" + name);
+    }
+
+    /** True when {@code oreNames.get(index)} is an alias rather than one of the ore's own two names. */
+    public boolean isAlias(int index) {
+        return index >= primaryNameCount;
     }
 
     public void addSmeltName(String name) {

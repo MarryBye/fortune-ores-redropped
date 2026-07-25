@@ -66,7 +66,7 @@ public class FortuneOres {
     /** Also the resource domain: every asset lives under {@code assets/fortuneores/}. */
     public static final String MODID = "fortuneores";
     public static final String NAME = "Fortune Ores Redropped";
-    public static final String VERSION = "1.1.0";
+    public static final String VERSION = "1.1.1";
     // Mod Info End
 
     // Singleton
@@ -89,6 +89,11 @@ public class FortuneOres {
     public static int nextMeta;
 
     public static boolean allowProcessing;
+
+    /** Register the chunks and ore blocks in the ore-processing machines of whichever tech mods are installed. */
+    public static boolean techModIntegration;
+    /** How many outputs one chunk is worth in those machines; 2 is the ore doubling every one of them is built on. */
+    public static int machineOutputMultiplier;
 
     /**
      * When on, an ore with EnableOreGen is also denied at block-placement level during chunk generation, which catches
@@ -202,6 +207,8 @@ public class FortuneOres {
     @EventHandler
     public void postInit(FMLPostInitializationEvent event) {
         addSmelting();
+        // Late enough that every mod has registered its dusts, gems and machine recipes; see MachineCompat.
+        MachineCompat.register();
     }
 
     public void addUniversalOre(String oreName, OreRarity rarity, String... customSmeltTargets) {
@@ -453,6 +460,11 @@ public class FortuneOres {
         addUniversalOre("Thorium", OreRarity.RARE);
         addUniversalOre("Uranium", OreRarity.RARE);
         addUniversalOre("Rutile", OreRarity.RARE);
+        // Rutile is titanium dioxide - the ore titanium is actually won from - so it also carries "oreTitanium", which
+        // is what lets a tech mod process it as titanium and what makes its chunk smelt into a titanium ingot when the
+        // pack has no rutile of its own. The alias never steals another mod's titanium ore: an ore's own name beats
+        // another ore's alias in OreSwapper, so a mined titanium ore block still belongs to the Titanium ore above.
+        addAlias("Titanium");
         // Rutile is a heavy beach sand mineral, so it washes up along shores and dry river country.
         setVeins(4, 40, 5, 1, 40);
         setBiomes("type:BEACH", "type:SANDY", "type:MESA", "type:RIVER");
@@ -823,7 +835,7 @@ public class FortuneOres {
      * own chunks are skipped: with AllowProcessing off they are registered as {@code dust*} themselves, and a chunk
      * that smelts into a chunk is not a recipe.
      */
-    private static ItemStack firstOreDictItem(String oreName) {
+    static ItemStack firstOreDictItem(String oreName) {
         for (ItemStack stack : OreDictionary.getOres(oreName)) {
             if (stack == null || stack.getItem() == null) continue;
             if (stack.getItem() == itemChunk) continue;

@@ -108,6 +108,30 @@ public class Config {
                 + "which only ever get their own netherrack/end-stone variants.")
             .getInt();
 
+        // ---- Tech mod ore processing -------------------------------------------------------------------------------
+        FortuneOres.techModIntegration = config.get(
+            "AAAGeneral",
+            "TechModIntegration",
+            true,
+            "Register the ore chunks and the ore blocks in the ore-processing machines of every supported tech mod "
+                + "that is installed: Mekanism's Enrichment Chamber, Thermal Expansion's Pulverizer, IC2's Macerator "
+                + "and Immersive Engineering's Crusher. Those mods only build ore recipes for a hard-coded list of "
+                + "materials of their own, so without this only a handful of ores (iron, gold, copper, ...) can be "
+                + "doubled and the rest are furnace-only. A machine that can be asked is never given a recipe for an "
+                + "input it already handles; Mekanism cannot be asked, but keys its recipes by input and so ends up "
+                + "with exactly one either way. Turn off to leave every machine as its own mod set it up.")
+            .getBoolean(true);
+        FortuneOres.machineOutputMultiplier = clampMultiplier(
+            config.get(
+                "AAAGeneral",
+                "MachineOutputMultiplier",
+                2,
+                "How many outputs one ore chunk is worth in those machines (1-64). 2 is the ore doubling all of them "
+                    + "are built around; 1 turns the machines into an alternative to the furnace rather than a "
+                    + "profit. An ore block (silk touch) pays this times its BaseDrop, so processing the chunks a "
+                    + "mined block drops is never worse than processing the block - that route still gets Fortune.")
+                .getInt());
+
         readForeignOreBlocks(config);
 
         // Every ore's drop/smelt AND world-gen settings live together in its own config category (the ore name).
@@ -242,6 +266,13 @@ public class Config {
         if (config.hasChanged()) {
             config.save();
         }
+    }
+
+    /** A machine output has to fit in one stack, and 0 would register recipes that hand out nothing. */
+    private static int clampMultiplier(int value) {
+        if (value < 1) return 1;
+        if (value > 64) return 64;
+        return value;
     }
 
     /** Keeps a percentage knob usable: 0 or less would silence the ore entirely, which is what EnableOreGen is for. */

@@ -9,9 +9,11 @@ public class OreDictHandler {
 
     @SubscribeEvent
     public void Handle(OreRegisterEvent event) {
-        if (!event.Name.contains("ore")) return;
+        if (!event.Name.startsWith("ore")) return;
 
-        String oreName = event.Name.replace("ore", "");
+        // Only the prefix is stripped: "ore" also occurs inside material names, and replacing every occurrence would
+        // mangle them.
+        String oreName = event.Name.substring("ore".length());
 
         for (Ore ore : FortuneOres.oreStorage) {
             if (ore.name.equals(oreName)) {

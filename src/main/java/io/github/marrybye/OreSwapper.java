@@ -69,17 +69,36 @@ public class OreSwapper {
         if (built) return;
         built = true;
 
+        // Two passes, because two ores may share an ore-dictionary name: Rutile carries oreTitanium so it can be
+        // processed as titanium, but a mined titanium ore block still belongs to the Titanium ore. An ore's own names
+        // are claimed first and an alias only takes what is left, so the ore owning a name outright always wins.
         for (Ore ore : FortuneOres.oreStorage) {
-            // Swapping mined ore drops to chunks is exactly the "raw ore" feature, gated per ore by EnableRawOre.
-            if (!ore.enableRawOre) continue;
+            if (!swappable(ore)) continue;
 
-            // Pure vanilla ores have no ore-dictionary names to swap; everything else is also matched via the ore dict.
-            if (ore.isVanilla) continue;
+            for (int i = 0; i < ore.oreNames.size(); i++) {
+                if (!ore.isAlias(i)) addOre(ore.oreNames.get(i), ore);
+            }
+        }
+        for (Ore ore : FortuneOres.oreStorage) {
+            if (!swappable(ore)) continue;
 
-            for (String oreName : ore.oreNames) {
+            for (int i = 0; i < ore.oreNames.size(); i++) {
+                if (!ore.isAlias(i)) continue;
+
+                String oreName = ore.oreNames.get(i);
+                if (dropMap.containsKey(OreDictionary.getOreID(oreName))) continue;
                 addOre(oreName, ore);
             }
         }
+    }
+
+    /** Whether a mined block carrying this ore's names should be turned into its chunks at all. */
+    private static boolean swappable(Ore ore) {
+        // Swapping mined ore drops to chunks is exactly the "raw ore" feature, gated per ore by EnableRawOre.
+        if (!ore.enableRawOre) return false;
+
+        // Pure vanilla ores have no ore-dictionary names to swap; everything else is also matched via the ore dict.
+        return !ore.isVanilla;
     }
 
     public static void addOre(String oreName, Ore ore) {
@@ -105,32 +124,49 @@ public class OreSwapper {
     private static synchronized void buildBlockMap() {
         if (blockMapBuilt) return;
 
+        // Everything an ore owns outright: its vanilla blocks, its own ore-dictionary names and the foreign blocks
+        // pinned to it by registry id.
         for (Ore ore : FortuneOres.oreStorage) {
             if (!ore.enableRawOre) continue;
 
             // Vanilla ore blocks (coal, diamond, ...) are not ore-dicted, and lit redstone ore is a block of its own.
             if (ore.vanillaBlocks != null) {
-                for (Block block : ore.vanillaBlocks) markBlock(block, OreDictionary.WILDCARD_VALUE, ore, false);
+                for (Block block : ore.vanillaBlocks) markBlock(block, OreDictionary.WILDCARD_VALUE, ore, false, true);
             }
             if (ore.isVanilla) continue;
 
-            // Every block registered under one of the ore's ore-dictionary names, metadata included.
-            for (String oreName : ore.oreNames) {
-                boolean nether = oreName.contains("Nether");
-                for (ItemStack stack : OreDictionary.getOres(oreName)) {
-                    if (stack == null || stack.getItem() == null) continue;
-                    markBlock(Block.getBlockFromItem(stack.getItem()), stack.getItemDamage(), ore, nether);
-                }
-            }
+            markNamedBlocks(ore, false);
 
             // Ores their own mod never puts in the ore dictionary, addressed by registry id instead.
-            for (ForeignOreBlock foreign : ore.foreignBlocks) markBlock(foreign.block, foreign.meta, ore, false);
+            for (ForeignOreBlock foreign : ore.foreignBlocks) markBlock(foreign.block, foreign.meta, ore, false, true);
+        }
+
+        // Aliases second, and only for blocks no ore has claimed by a name of its own; see build().
+        for (Ore ore : FortuneOres.oreStorage) {
+            if (!swappable(ore)) continue;
+
+            markNamedBlocks(ore, true);
         }
 
         blockMapBuilt = true;
     }
 
-    private static void markBlock(Block block, int meta, Ore ore, boolean nether) {
+    /** Marks every block registered under the ore's own names ({@code aliases} false) or under its aliases (true). */
+    private static void markNamedBlocks(Ore ore, boolean aliases) {
+        for (int i = 0; i < ore.oreNames.size(); i++) {
+            if (ore.isAlias(i) != aliases) continue;
+
+            String oreName = ore.oreNames.get(i);
+            boolean nether = oreName.contains("Nether");
+            for (ItemStack stack : OreDictionary.getOres(oreName)) {
+                if (stack == null || stack.getItem() == null) continue;
+                markBlock(Block.getBlockFromItem(stack.getItem()), stack.getItemDamage(), ore, nether, !aliases);
+            }
+        }
+    }
+
+    /** {@code claim} false only fills metadata values still unclaimed, which is how an alias yields to an owner. */
+    private static void markBlock(Block block, int meta, Ore ore, boolean nether, boolean claim) {
         if (block == null || block == Blocks.air) return;
         // Our own ore blocks carry the very same ore-dictionary names and roll their own drops in
         // BlockFortuneOre#getDrops - never swap those.
@@ -149,7 +185,7 @@ public class OreSwapper {
                 if (metas[i] == null) metas[i] = entry;
             }
         } else if (meta >= 0 && meta < metas.length) {
-            metas[meta] = entry;
+            if (claim || metas[meta] == null) metas[meta] = entry;
         }
     }
 
