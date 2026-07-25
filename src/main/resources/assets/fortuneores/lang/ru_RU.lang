@@ -127,6 +127,14 @@ item.orechunks.malachite.name=Кусочек малахита
 item.orechunks.tanzanite.name=Кусочек танзанита
 item.orechunks.shadow.name=Кусочек тени
 
+# Инфузные осколки (Thaumcraft)
+item.orechunks.infusedair.name=Осколок воздуха
+item.orechunks.infusedfire.name=Осколок огня
+item.orechunks.infusedwater.name=Осколок воды
+item.orechunks.infusedearth.name=Осколок земли
+item.orechunks.infusedorder.name=Осколок порядка
+item.orechunks.infusedentropy.name=Осколок хаоса
+
 # Рудные блоки (в камне)
 tile.fortuneores.ore.coal.name=Угольная руда
 tile.fortuneores.ore.diamond.name=Алмазная руда
@@ -158,3 +166,29 @@ tile.fortuneores.deepslate_ore.malachite.name=Глубинная малахит�
 tile.fortuneores.deepslate_ore.tanzanite.name=Глубинная танзанитовая руда
 tile.fortuneores.deepslate_ore.shadow.name=Глубинная теневая руда
 tile.fortuneores.deepslate_ore.draconium.name=Глубинная дракониевая руда
+
+# Инфузные руды (Thaumcraft)
+tile.fortuneores.ore.infusedair.name=Инфузная руда воздуха
+tile.fortuneores.ore.infusedfire.name=Инфузная руда огня
+tile.fortuneores.ore.infusedwater.name=Инфузная руда воды
+tile.fortuneores.ore.infusedearth.name=Инфузная руда земли
+tile.fortuneores.ore.infusedorder.name=Инфузная руда порядка
+tile.fortuneores.ore.infusedentropy.name=Инфузная руда хаоса
+tile.fortuneores.deepslate_ore.infusedair.name=Глубинная инфузная руда воздуха
+tile.fortuneores.deepslate_ore.infusedfire.name=Глубинная инфузная руда огня
+tile.fortuneores.deepslate_ore.infusedwater.name=Глубинная инфузная руда воды
+tile.fortuneores.deepslate_ore.infusedearth.name=Глубинная инфузная руда земли
+tile.fortuneores.deepslate_ore.infusedorder.name=Глубинная инфузная руда порядка
+tile.fortuneores.deepslate_ore.infusedentropy.name=Глубинная инфузная руда хаоса
+tile.fortuneores.netherrack_ore.infusedair.name=Незеровая инфузная руда воздуха
+tile.fortuneores.netherrack_ore.infusedfire.name=Незеровая инфузная руда огня
+tile.fortuneores.netherrack_ore.infusedwater.name=Незеровая инфузная руда воды
+tile.fortuneores.netherrack_ore.infusedearth.name=Незеровая инфузная руда земли
+tile.fortuneores.netherrack_ore.infusedorder.name=Незеровая инфузная руда порядка
+tile.fortuneores.netherrack_ore.infusedentropy.name=Незеровая инфузная руда хаоса
+tile.fortuneores.endstone_ore.infusedair.name=Эндовая инфузная руда воздуха
+tile.fortuneores.endstone_ore.infusedfire.name=Эндовая инфузная руда огня
+tile.fortuneores.endstone_ore.infusedwater.name=Эндовая инфузная руда воды
+tile.fortuneores.endstone_ore.infusedearth.name=Эндовая инфузная руда земли
+tile.fortuneores.endstone_ore.infusedorder.name=Эндовая инфузная руда порядка
+tile.fortuneores.endstone_ore.infusedentropy.name=Эндовая инфузная руда хаоса

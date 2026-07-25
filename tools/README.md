@@ -53,6 +53,14 @@ python tools/build_textures.py --out <folder>     # write somewhere else
 python tools/build_textures.py --size 32          # output at a higher resolution
 ```
 
+## Generated overlays — `make_shard_textures.py`
+
+The six Thaumcraft infused ores are the same crystal cluster in six aspect colours, so their art is generated
+instead of drawn. `python tools/make_shard_textures.py` writes the item icons straight into
+`assets/fortuneores/textures/items/` and their overlays into `texture_input/overlays/` (plus the four backgrounds);
+run `build_textures.py` afterwards to turn those overlays into the block variants. Retint `ASPECTS` or reshape
+`SHARDS` in the script and every icon and block follows.
+
 ## Per-ore dimension control
 
 Where each ore may spawn is set in the mod config (`config/FortuneOres.cfg`), per material, under its own category:

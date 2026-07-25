@@ -11,12 +11,30 @@ import net.minecraftforge.common.config.Configuration;
 public class Config {
 
     /**
-     * Ores fully replaced out of the box (both EnableRawOre and EnableOreGen on): the vanilla Minecraft ores. Every
-     * other ore ships off so the player opts in to exactly what they want instead of switching off dozens of variants.
-     * Matched case-insensitively against {@link Ore#name}.
+     * Ores fully replaced out of the box (both EnableRawOre and EnableOreGen on): the vanilla Minecraft ores, plus the
+     * ores this mod ships tuned world-gen for rather than merely recognising - the two Applied Energistics quartzes and
+     * the six Thaumcraft infused ores, whose whole point is the custom vein shape and shard drop described in
+     * {@code FortuneOres#setupOres}. Every other ore ships off so the player opts in to exactly what they want instead
+     * of switching off dozens of variants. Matched case-insensitively against {@link Ore#name}.
      */
     private static final Set<String> DEFAULT_REPLACE = new HashSet<String>(
-        Arrays.asList("copper", "iron", "gold", "coal", "diamond", "redstone", "lapis", "quartz"));
+        Arrays.asList(
+            "copper",
+            "iron",
+            "gold",
+            "coal",
+            "diamond",
+            "redstone",
+            "lapis",
+            "quartz",
+            "certusquartz",
+            "chargedcertusquartz",
+            "infusedair",
+            "infusedfire",
+            "infusedwater",
+            "infusedearth",
+            "infusedorder",
+            "infusedentropy"));
 
     /**
      * Ores that additionally default to EnableRawOre only (chunk when mined, but no world-gen or suppression). Emerald

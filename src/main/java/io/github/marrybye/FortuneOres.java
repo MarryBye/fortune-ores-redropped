@@ -58,7 +58,7 @@ public class FortuneOres {
     /** Also the resource domain: every asset lives under {@code assets/fortuneores/}. */
     public static final String MODID = "fortuneores";
     public static final String NAME = "Fortune Ores Redropped";
-    public static final String VERSION = "1.0.6";
+    public static final String VERSION = "1.0.7";
     // Mod Info End
 
     // Singleton
@@ -246,6 +246,30 @@ public class FortuneOres {
     }
 
     /**
+     * Overrides how many chunks the last-added ore drops before Fortune. {@link #addUniversalOre} leaves this at the
+     * 1-1 default; ores that should come out in a handful (the certus quartzes, the infused shards) set a range here.
+     */
+    public void setDrops(int min, int max) {
+        Ore ore = oreStorage.get(nextMeta - 1);
+        ore.dropCount = min;
+        ore.dropCountMax = max;
+    }
+
+    /**
+     * Overrides the world-gen shape of the last-added ore, whose defaults otherwise come from its {@link OreRarity}.
+     * Note that {@code veinSize} feeds the same ellipsoid vanilla {@code WorldGenMinable} uses, so it is an upper bound
+     * on a vein rather than an exact block count: 8 lands 4-8 blocks, 5 lands 2-6, and 3 lands 1-2 (and nothing at all
+     * about two thirds of the time, which is how a genuinely rare ore stays rare). All four values are config knobs.
+     */
+    public void setVeins(int minY, int maxY, int veinSize, int veinsPerChunk) {
+        Ore ore = oreStorage.get(nextMeta - 1);
+        ore.minY = minY;
+        ore.maxY = maxY;
+        ore.veinSize = veinSize;
+        ore.veinsPerChunk = veinsPerChunk;
+    }
+
+    /**
      * Also makes the given vanilla ore block(s) drop the last-added ore's chunk, on top of its ore-dictionary matching.
      * Used for vanilla ores (e.g. emerald) whose block drops a finished item and therefore cannot be matched through
      * the
@@ -313,7 +337,7 @@ public class FortuneOres {
         addAlias("Mangnanese");
         addUniversalOre("Cinnabar", OreRarity.UNCOMMON, "quicksilver");
         // Thaumcraft packs its ores into one "blockCustomOre" (0 = cinnabar, 1-6 = infused stone, 7 = amber-bearing
-        // stone), so both are pinned down by metadata; the infused ores in between are none of our business.
+        // stone), so each is pinned down by metadata; the six infused ones are handled further down.
         addForeignBlock("Thaumcraft:blockCustomOre:0");
         addUniversalOre("Pyrite", OreRarity.UNCOMMON);
         addUniversalOre("Apatite", OreRarity.UNCOMMON);
@@ -429,10 +453,22 @@ public class FortuneOres {
         addUniversalOre("Onyx", OreRarity.RARE);
         addUniversalOre("Anglesite", OreRarity.RARE);
         addUniversalOre("Benitoite", OreRarity.RARE);
+        // Applied Energistics 2's two quartzes. Both drop 2-4 chunks and generate from bedrock up to y=40 in every
+        // dimension; plain certus is the common one (4-8 blocks a vein, many veins), charged is the rare counterpart
+        // (1-2 blocks a vein, and most rolls place nothing at all). AE2 does ore-dict both ore blocks, but its charged
+        // ore drops a finished crystal rather than an ItemBlock, so the blocks are pinned down by registry id as well -
+        // ignored when AE2 is absent. A chunk smelts back into AE2's crystal, falling back to the usual
+        // ingot/gem/dust lookup when some other mod provides the material.
         addUniversalOre("CertusQuartz", OreRarity.RARE, "crystalCertusQuartz");
         setTexture("certus_quartz");
+        addForeignBlock("appliedenergistics2:tile.OreQuartz");
+        setDrops(2, 4);
+        setVeins(0, 40, 8, 10);
         addUniversalOre("ChargedCertusQuartz", OreRarity.RARE, "crystalChargedCertusQuartz");
         setTexture("charged_certus_quartz");
+        addForeignBlock("appliedenergistics2:tile.OreQuartzCharged");
+        setDrops(2, 4);
+        setVeins(0, 40, 3, 3);
         addUniversalOre("ArcaneCrystal", OreRarity.RARE);
         setTexture("arcane_crystal");
         addUniversalOre("RockCrystal", OreRarity.RARE);
@@ -484,6 +520,44 @@ public class FortuneOres {
         // block yields our chunk too. Args after smeltCount: xpDropMin, xpDropMax, minY, maxY, veinSize, veinsPerChunk,
         // harvestLevel, then the vanilla block(s).
         addVanillaOre("Quartz", new ItemStack(Items.quartz), 0.2f, 1, 2, 1, 2, 5, 10, 118, 14, 8, 0, Blocks.quartz_ore);
+
+        // ---- Thaumcraft infused ores (one per primal aspect) -------------------------------------------------------
+        // Thaumcraft has no ore-dictionary name for these, so "oreInfusedAir" and friends are this mod's own; the six
+        // ore blocks register under them, which also lets scanning mods find them. Thaumcraft's own infused stone is
+        // metadata 1-6 of the blockCustomOre this file already pins cinnabar (0) and amber (7) down by, in aspect order
+        // air, fire, water, earth, order, entropy - each drops the matching primal shard, which is what a chunk smelts
+        // back into ("shardAir", ...), with the usual ingot/gem/dust lookup behind it. They all drop 2-3 shards, and
+        // generate up to y=30 in every dimension.
+        addUniversalOre("InfusedAir", OreRarity.RARE, "shardAir");
+        setTexture("infused_air");
+        addForeignBlock("Thaumcraft:blockCustomOre:1");
+        setDrops(2, 3);
+        setVeins(0, 30, 4, 2);
+        addUniversalOre("InfusedFire", OreRarity.RARE, "shardFire");
+        setTexture("infused_fire");
+        addForeignBlock("Thaumcraft:blockCustomOre:2");
+        setDrops(2, 3);
+        setVeins(0, 30, 4, 2);
+        addUniversalOre("InfusedWater", OreRarity.RARE, "shardWater");
+        setTexture("infused_water");
+        addForeignBlock("Thaumcraft:blockCustomOre:3");
+        setDrops(2, 3);
+        setVeins(0, 30, 4, 2);
+        addUniversalOre("InfusedEarth", OreRarity.RARE, "shardEarth");
+        setTexture("infused_earth");
+        addForeignBlock("Thaumcraft:blockCustomOre:4");
+        setDrops(2, 3);
+        setVeins(0, 30, 4, 2);
+        addUniversalOre("InfusedOrder", OreRarity.RARE, "shardOrder");
+        setTexture("infused_order");
+        addForeignBlock("Thaumcraft:blockCustomOre:5");
+        setDrops(2, 3);
+        setVeins(0, 30, 4, 2);
+        addUniversalOre("InfusedEntropy", OreRarity.RARE, "shardEntropy");
+        setTexture("infused_entropy");
+        addForeignBlock("Thaumcraft:blockCustomOre:6");
+        setDrops(2, 3);
+        setVeins(0, 30, 4, 2);
     }
 
     private void addOreDicting() {

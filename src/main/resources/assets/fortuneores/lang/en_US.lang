@@ -128,6 +128,14 @@ item.orechunks.tanzanite.name=Tanzanite Chunk
 item.orechunks.shadow.name=Shadow Chunk
 item.orechunks.quartz.name=Quartz Chunk
 
+# Thaumcraft infused shards
+item.orechunks.infusedair.name=Air Infused Shard
+item.orechunks.infusedfire.name=Fire Infused Shard
+item.orechunks.infusedwater.name=Water Infused Shard
+item.orechunks.infusedearth.name=Earth Infused Shard
+item.orechunks.infusedorder.name=Order Infused Shard
+item.orechunks.infusedentropy.name=Entropy Infused Shard
+
 # Ore blocks (stone-hosted)
 tile.fortuneores.ore.copper.name=Copper Ore
 tile.fortuneores.ore.iron.name=Iron Ore
@@ -235,6 +243,14 @@ tile.fortuneores.ore.malachite.name=Malachite Ore
 tile.fortuneores.ore.tanzanite.name=Tanzanite Ore
 tile.fortuneores.ore.shadow.name=Shadow Ore
 tile.fortuneores.ore.quartz.name=Quartz Ore
+
+# Thaumcraft infused ores
+tile.fortuneores.ore.infusedair.name=Air Infused Ore
+tile.fortuneores.ore.infusedfire.name=Fire Infused Ore
+tile.fortuneores.ore.infusedwater.name=Water Infused Ore
+tile.fortuneores.ore.infusedearth.name=Earth Infused Ore
+tile.fortuneores.ore.infusedorder.name=Order Infused Ore
+tile.fortuneores.ore.infusedentropy.name=Entropy Infused Ore
 
 # Ore blocks (deepslate-hosted)
 tile.fortuneores.deepslate_ore.copper.name=Deepslate Copper Ore
@@ -344,6 +360,14 @@ tile.fortuneores.deepslate_ore.tanzanite.name=Deepslate Tanzanite Ore
 tile.fortuneores.deepslate_ore.shadow.name=Deepslate Shadow Ore
 tile.fortuneores.deepslate_ore.quartz.name=Deepslate Quartz Ore
 
+# Thaumcraft infused ores
+tile.fortuneores.deepslate_ore.infusedair.name=Deepslate Air Infused Ore
+tile.fortuneores.deepslate_ore.infusedfire.name=Deepslate Fire Infused Ore
+tile.fortuneores.deepslate_ore.infusedwater.name=Deepslate Water Infused Ore
+tile.fortuneores.deepslate_ore.infusedearth.name=Deepslate Earth Infused Ore
+tile.fortuneores.deepslate_ore.infusedorder.name=Deepslate Order Infused Ore
+tile.fortuneores.deepslate_ore.infusedentropy.name=Deepslate Entropy Infused Ore
+
 # Ore blocks (netherrack-hosted)
 tile.fortuneores.netherrack_ore.copper.name=Nether Copper Ore
 tile.fortuneores.netherrack_ore.iron.name=Nether Iron Ore
@@ -452,6 +476,14 @@ tile.fortuneores.netherrack_ore.tanzanite.name=Nether Tanzanite Ore
 tile.fortuneores.netherrack_ore.shadow.name=Nether Shadow Ore
 tile.fortuneores.netherrack_ore.quartz.name=Nether Quartz Ore
 
+# Thaumcraft infused ores
+tile.fortuneores.netherrack_ore.infusedair.name=Nether Air Infused Ore
+tile.fortuneores.netherrack_ore.infusedfire.name=Nether Fire Infused Ore
+tile.fortuneores.netherrack_ore.infusedwater.name=Nether Water Infused Ore
+tile.fortuneores.netherrack_ore.infusedearth.name=Nether Earth Infused Ore
+tile.fortuneores.netherrack_ore.infusedorder.name=Nether Order Infused Ore
+tile.fortuneores.netherrack_ore.infusedentropy.name=Nether Entropy Infused Ore
+
 # Ore blocks (end-stone-hosted)
 tile.fortuneores.endstone_ore.copper.name=End Copper Ore
 tile.fortuneores.endstone_ore.iron.name=End Iron Ore
@@ -559,3 +591,11 @@ tile.fortuneores.endstone_ore.malachite.name=End Malachite Ore
 tile.fortuneores.endstone_ore.tanzanite.name=End Tanzanite Ore
 tile.fortuneores.endstone_ore.shadow.name=End Shadow Ore
 tile.fortuneores.endstone_ore.quartz.name=End Quartz Ore
+
+# Thaumcraft infused ores
+tile.fortuneores.endstone_ore.infusedair.name=End Air Infused Ore
+tile.fortuneores.endstone_ore.infusedfire.name=End Fire Infused Ore
+tile.fortuneores.endstone_ore.infusedwater.name=End Water Infused Ore
+tile.fortuneores.endstone_ore.infusedearth.name=End Earth Infused Ore
+tile.fortuneores.endstone_ore.infusedorder.name=End Order Infused Ore
+tile.fortuneores.endstone_ore.infusedentropy.name=End Entropy Infused Ore
