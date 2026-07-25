@@ -55,13 +55,14 @@ public class FortuneOres {
     }
 
     // Mod Info
-    public static final String MODID = "FortuneOres";
-    public static final String NAME = "FortuneOres";
+    /** Also the resource domain: every asset lives under {@code assets/fortuneores/}. */
+    public static final String MODID = "fortuneores";
+    public static final String NAME = "Fortune Ores Redropped";
     public static final String VERSION = "1.0.5";
     // Mod Info End
 
     // Singleton
-    @Instance("FortuneOres")
+    @Instance(FortuneOres.MODID)
     public static FortuneOres instance;
     public static Config config;
     public static ArrayList<Ore> oreStorage;

@@ -1,9 +1,10 @@
 [{
-  "modid": "FortuneOres",
-  "name": "FortuneOres",
+  "modid": "fortuneores",
+  "name": "Fortune Ores Redropped",
   "description": "Every ore generates as its own block in stone, deepslate, netherrack and end stone, and breaks into an ore chunk that supports Fortune and Silk Touch. Ores from Minecraft and other mods are either replaced outright or turned into chunks when mined, configurable per ore.",
   "authors": ["ClaudeAI", "MarryBye"],
   "credits": "Based on the original FortuneOres by DemoXin and KurtusReto.",
+  "url": "https://github.com/MarryBye/fortune-ores-redropped",
   "version": "1.0.5",
   "mcversion": "1.7.10"
 }]
