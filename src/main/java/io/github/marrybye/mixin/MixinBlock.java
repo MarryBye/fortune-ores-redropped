@@ -42,6 +42,6 @@ public class MixinBlock {
         if (drops == null || drops.isEmpty()) return;
 
         // Mutated in place, so the return value stays valid without cancelling the callback.
-        OreSwapper.swapDrops((Block) (Object) this, drops, fortune, world.rand);
+        OreSwapper.swapDrops((Block) (Object) this, metadata, drops, fortune, world.rand);
     }
 }

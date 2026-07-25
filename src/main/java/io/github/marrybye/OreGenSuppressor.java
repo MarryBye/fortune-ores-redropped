@@ -194,6 +194,9 @@ public class OreGenSuppressor {
             if (ore.vanillaBlocks != null) {
                 for (Block block : ore.vanillaBlocks) mark(block, OreDictionary.WILDCARD_VALUE);
             }
+
+            // Ores their own mod never puts in the ore dictionary, addressed by registry id instead.
+            for (ForeignOreBlock foreign : ore.foreignBlocks) mark(foreign.block, foreign.meta);
         }
 
         blockTableActive = !suppressBlocks.isEmpty();

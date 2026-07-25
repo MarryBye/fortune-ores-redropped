@@ -53,9 +53,26 @@ public class Ore {
     public Block[] vanillaBlocks;
     public ItemStack vanillaSmeltResult;
 
+    /**
+     * Foreign ore blocks declared as {@code "modid:name[:meta]"} for mods that keep their ore out of the ore
+     * dictionary, or whose ore block drops a finished item. Resolved into {@link #foreignBlocks} in
+     * {@link FortuneOres#init}.
+     */
+    public ArrayList<String> foreignBlockIds;
+    /** The entries of {@link #foreignBlockIds} whose mod is actually installed; empty when none is. */
+    public ArrayList<ForeignOreBlock> foreignBlocks;
+
     public ArrayList<String> oreNames;
+    /**
+     * Explicit smelting targets (e.g. {@code quicksilver} for Cinnabar), checked before anything derived from the
+     * ore's own name, in the order they were added.
+     */
     public ArrayList<String> smeltNames;
-    public ArrayList<String> ingotNames;
+    /**
+     * The ore's name plus its aliases. Each is tried with the {@code ingot} / {@code gem} / {@code dust} prefixes, in
+     * that priority order, to find what a chunk smelts into (see {@code FortuneOres#resolveSmeltResult}).
+     */
+    public ArrayList<String> smeltBases;
 
     public Ore(String oreName, int oreMeta) {
         name = oreName;
@@ -72,7 +89,9 @@ public class Ore {
 
         oreNames = new ArrayList<>();
         smeltNames = new ArrayList<>();
-        ingotNames = new ArrayList<>();
+        smeltBases = new ArrayList<>();
+        foreignBlockIds = new ArrayList<>();
+        foreignBlocks = new ArrayList<>();
     }
 
     public Ore(String oreName, int oreMeta, int droppedXPMin, int droppedXPMax, float xpSmelt) {
@@ -91,8 +110,12 @@ public class Ore {
         smeltNames.add(name);
     }
 
-    public void addIngotName(String name) {
-        addSmeltName("ingot" + name);
-        ingotNames.add("ingot" + name);
+    /** Adds a name (the ore's own or an alias) that the ingot/gem/dust smelting lookup should try. */
+    public void addSmeltBase(String name) {
+        smeltBases.add(name);
+    }
+
+    public void addForeignBlockId(String id) {
+        foreignBlockIds.add(id);
     }
 }

@@ -58,7 +58,7 @@ public class FortuneOres {
     /** Also the resource domain: every asset lives under {@code assets/fortuneores/}. */
     public static final String MODID = "fortuneores";
     public static final String NAME = "Fortune Ores Redropped";
-    public static final String VERSION = "1.0.5";
+    public static final String VERSION = "1.0.6";
     // Mod Info End
 
     // Singleton
@@ -128,6 +128,8 @@ public class FortuneOres {
     public void init(FMLInitializationEvent event) {
         addOreDicting();
         addBlockOreDicting();
+        // Every mod has registered its blocks by now, so the "modid:name[:meta]" ore blocks can be looked up.
+        resolveForeignBlocks();
         // Builds the drop-swap tables that both the harvest event and the Block#getDrops mixin read.
         OreSwapper.build();
         MinecraftForge.EVENT_BUS.register(new OreSwapper());
@@ -147,6 +149,27 @@ public class FortuneOres {
         // done so by the time our host-aware vein generator reads the terrain.
         GameRegistry.registerWorldGenerator(new WorldGenOres(), 2000);
         MinecraftForge.ORE_GEN_BUS.register(new OreGenSuppressor());
+    }
+
+    /**
+     * Turns every ore's declared {@code "modid:name[:meta]"} ore blocks into block references. Ids belonging to a mod
+     * that is not installed are simply dropped, which is what makes these declarations soft dependencies.
+     */
+    private void resolveForeignBlocks() {
+        for (Ore ore : oreStorage) {
+            if (!ore.enabled) continue;
+
+            for (String blockId : ore.foreignBlockIds) {
+                ForeignOreBlock resolved = ForeignOreBlock.resolve(blockId);
+                if (resolved == null) continue;
+
+                ore.foreignBlocks.add(resolved);
+                FMLLog.info(
+                    "[FortuneOres] Foreign ore block '%s' found; it is now handled as %s ore.",
+                    blockId,
+                    ore.name);
+            }
+        }
     }
 
     /**
@@ -182,14 +205,10 @@ public class FortuneOres {
         newOre.veinsPerChunk = rarity.veinsPerChunk;
         newOre.harvestLevel = rarity.harvestLevel;
         newOre.addOreName(oreName);
-        newOre.addIngotName(oreName);
+        // The ingot/gem/dust names are derived from this at smelting time, in that priority order.
+        newOre.addSmeltBase(oreName);
 
-        // Автоматическая поддержка плавки (приоритет: слиток > пыль > кристалл)
-        newOre.addSmeltName("gem" + oreName);
-        newOre.addSmeltName("dust" + oreName);
-        newOre.addSmeltName("ingot" + oreName);
-
-        // Добавляем специфические результаты плавки, если они переданы
+        // Explicit smelting targets, checked before the derived ones (Cinnabar -> quicksilver, ...).
         for (String customTarget : customSmeltTargets) {
             newOre.addSmeltName(customTarget);
         }
@@ -202,7 +221,19 @@ public class FortuneOres {
         Ore ore = oreStorage.get(nextMeta - 1);
         for (String alias : aliases) {
             ore.addOreName(alias);
-            ore.addIngotName(alias);
+            ore.addSmeltBase(alias);
+        }
+    }
+
+    /**
+     * Points the last-added ore at another mod's ore block, given as {@code "modid:name"} or {@code "modid:name:meta"}.
+     * Needed for the mods whose ore is not in the ore dictionary at all, and for the ones packing several unrelated
+     * ores into one block where only some metadata values may be touched. Ids whose mod is not installed are ignored.
+     */
+    public void addForeignBlock(String... blockIds) {
+        Ore ore = oreStorage.get(nextMeta - 1);
+        for (String blockId : blockIds) {
+            ore.addForeignBlockId(blockId);
         }
     }
 
@@ -281,12 +312,18 @@ public class FortuneOres {
         setTexture("mangnanese"); // texture ships under the misspelled "mangnanese" file name
         addAlias("Mangnanese");
         addUniversalOre("Cinnabar", OreRarity.UNCOMMON, "quicksilver");
+        // Thaumcraft packs its ores into one "blockCustomOre" (0 = cinnabar, 1-6 = infused stone, 7 = amber-bearing
+        // stone), so both are pinned down by metadata; the infused ores in between are none of our business.
+        addForeignBlock("Thaumcraft:blockCustomOre:0");
         addUniversalOre("Pyrite", OreRarity.UNCOMMON);
         addUniversalOre("Apatite", OreRarity.UNCOMMON);
         addUniversalOre("Saltpeter", OreRarity.UNCOMMON);
         addAlias("Saltpetre");
         addUniversalOre("Potash", OreRarity.UNCOMMON);
+        // Thaumcraft's amber-bearing stone drops finished amber rather than an ore-dicted ore block; the chunk smelts
+        // back into that amber through the ore dictionary's "gemAmber".
         addUniversalOre("Amber", OreRarity.UNCOMMON);
+        addForeignBlock("Thaumcraft:blockCustomOre:7");
         addUniversalOre("Biotite", OreRarity.UNCOMMON);
         addUniversalOre("Linium", OreRarity.UNCOMMON);
         addUniversalOre("Crystal", OreRarity.UNCOMMON);
@@ -437,7 +474,8 @@ public class FortuneOres {
         // Tainted Magic Shadow Ore. Expected ore-dict "oreShadow"; smelt result is matched as gem/dust/ingot Shadow.
         // If that mod uses a different ore-dictionary name, nothing breaks - the chunk simply won't match until the
         // name is added here (see addOreName/addSmeltName below).
-        addUniversalOre("Shadow", OreRarity.EPIC, "gemShadow", "ingotShadowmetal");
+        // "gemShadow" needs no listing here - it is one of the names derived from the ore's own name.
+        addUniversalOre("Shadow", OreRarity.EPIC, "ingotShadowmetal");
         // Draconium (Draconic Evolution) already exists above as an ore-dicted chunk; only its world-gen block is new.
 
         // Nether Quartz - the mod's own ore/chunk (overworld, deepslate, nether and end variants, like every ore now).
@@ -494,20 +532,54 @@ public class FortuneOres {
     }
 
     /**
-     * Resolves what a chunk/ore of the given ore should smelt into: a fixed vanilla item, otherwise the first matching
-     * ore-dictionary result (gem &gt; dust &gt; ingot). Always returns a copy so callers can freely set the stack size.
+     * Smelting output priority: a chunk becomes an ingot when the modpack has one, otherwise a gem, and only a dust
+     * when it has neither. So iron yields an ingot, emerald yields a gem, and an ore that is neither smeltable nor
+     * cuttable still yields its dust.
+     */
+    private static final String[] SMELT_PREFIXES = { "ingot", "gem", "dust" };
+
+    /**
+     * Resolves what a chunk/ore of the given ore should smelt into: a fixed vanilla item, otherwise the first match
+     * among the ore's explicit smelting targets, and finally its name (and aliases) run through
+     * {@link #SMELT_PREFIXES}. Always returns a copy so callers can freely set the stack size.
      */
     private ItemStack resolveSmeltResult(Ore ore) {
         if (ore.isVanilla) {
             return ore.vanillaSmeltResult != null ? ore.vanillaSmeltResult.copy() : null;
         }
-        ItemStack result = null;
+
+        // Explicit targets (Cinnabar -> quicksilver, CertusQuartz -> crystalCertusQuartz) win over anything derived
+        // from the ore's own name.
         for (String smeltName : ore.smeltNames) {
-            ArrayList<ItemStack> smeltResults = OreDictionary.getOres(smeltName);
-            if (!smeltResults.isEmpty()) result = smeltResults.get(0)
-                .copy();
+            ItemStack match = firstOreDictItem(smeltName);
+            if (match != null) return match;
         }
-        return result;
+
+        for (String prefix : SMELT_PREFIXES) {
+            for (String base : ore.smeltBases) {
+                ItemStack match = firstOreDictItem(prefix + base);
+                if (match != null) return match;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The first usable item registered under an ore-dictionary name, as a copy, or null when there is none. This mod's
+     * own chunks are skipped: with AllowProcessing off they are registered as {@code dust*} themselves, and a chunk
+     * that smelts into a chunk is not a recipe.
+     */
+    private static ItemStack firstOreDictItem(String oreName) {
+        for (ItemStack stack : OreDictionary.getOres(oreName)) {
+            if (stack == null || stack.getItem() == null) continue;
+            if (stack.getItem() == itemChunk) continue;
+
+            ItemStack result = stack.copy();
+            // A wildcard registration means "any variant"; a furnace output has to name one, so take the first.
+            if (result.getItemDamage() == OreDictionary.WILDCARD_VALUE) result.setItemDamage(0);
+            return result;
+        }
+        return null;
     }
 
     private void addSmelting() {

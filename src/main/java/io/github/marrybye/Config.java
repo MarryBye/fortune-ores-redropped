@@ -1,7 +1,9 @@
 package io.github.marrybye;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import net.minecraftforge.common.config.Configuration;
@@ -61,6 +63,8 @@ public class Config {
                 + "variant. Matches where the deepslate layer begins (default 22). Has no effect in the Nether or End, "
                 + "which only ever get their own netherrack/end-stone variants.")
             .getInt();
+
+        readForeignOreBlocks(config);
 
         // Every ore's drop/smelt AND world-gen settings live together in its own config category (the ore name).
         for (Ore ore : FortuneOres.oreStorage) {
@@ -132,6 +136,49 @@ public class Config {
 
         if (config.hasChanged()) {
             config.save();
+        }
+    }
+
+    /**
+     * Reads the {@code OreName=modid:block[:meta]} list that assigns another mod's ore block to one of this mod's
+     * ores. It exists for the mods the ore dictionary cannot describe: ores that are never registered in it, and ores
+     * sharing one block with unrelated ones, where only certain metadata values may be swapped. The list in the config
+     * file replaces the built-in one wholesale, so an entry can be removed by deleting its line.
+     */
+    private void readForeignOreBlocks(Configuration config) {
+        List<String> builtIn = new ArrayList<String>();
+        for (Ore ore : FortuneOres.oreStorage) {
+            for (String blockId : ore.foreignBlockIds) builtIn.add(ore.name + "=" + blockId);
+        }
+
+        String[] configured = config.get(
+            "AAAGeneral",
+            "ForeignOreBlocks",
+            builtIn.toArray(new String[builtIn.size()]),
+            "Ore blocks from other mods that this mod should handle as one of its own ores, one 'OreName=modid:block' "
+                + "or 'OreName=modid:block:meta' per line. Only needed for ores the ore dictionary does not describe - "
+                + "everything registered as oreCopper, oreIron and so on is already found automatically. Give the "
+                + "metadata when one block holds several unrelated ores (Thaumcraft's blockCustomOre: 0 is cinnabar, "
+                + "1-6 are the infused ores, 7 is amber); leave it out to match every metadata value. Entries whose "
+                + "mod is not installed are ignored, and an entry is removed by deleting its line.")
+            .getStringList();
+
+        for (Ore ore : FortuneOres.oreStorage) ore.foreignBlockIds.clear();
+
+        for (String entry : configured) {
+            if (entry == null) continue;
+
+            int sep = entry.indexOf('=');
+            if (sep <= 0) continue;
+
+            Ore ore = FortuneOres.getOre(
+                entry.substring(0, sep)
+                    .trim());
+            if (ore == null) continue;
+
+            ore.addForeignBlockId(
+                entry.substring(sep + 1)
+                    .trim());
         }
     }
 }
