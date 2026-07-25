@@ -1,0 +1,160 @@
+itemGroup.OreChunks=Fortune Ores
+
+item.orechunks.mysterious.name=Загадочный кусочек
+
+# Обычные металлы
+item.orechunks.copper.name=Кусочек меди
+item.orechunks.iron.name=Кусочек железа
+item.orechunks.tin.name=Кусочек олова
+item.orechunks.lead.name=Кусочек свинца
+item.orechunks.osmium.name=Кусочек осмия
+item.orechunks.aluminum.name=Кусочек алюминия
+item.orechunks.bauxite.name=Кусочек боксита
+item.orechunks.silicon.name=Кусочек кремния
+item.orechunks.cheese.name=Кусочек сыра
+item.orechunks.fossil.name=Кусочек окаменелости
+
+# Необычные металлы и минералы
+item.orechunks.silver.name=Кусочек серебра
+item.orechunks.nickel.name=Кусочек никеля
+item.orechunks.zinc.name=Кусочек цинка
+item.orechunks.boron.name=Кусочек бора
+item.orechunks.lithium.name=Кусочек лития
+item.orechunks.magnesium.name=Кусочек магния
+item.orechunks.manganese.name=Кусочек марганца
+item.orechunks.cinnabar.name=Кусочек киновари
+item.orechunks.pyrite.name=Кусочек пирита
+item.orechunks.apatite.name=Кусочек апатита
+item.orechunks.saltpeter.name=Кусочек селитры
+item.orechunks.potash.name=Кусочек поташа
+item.orechunks.amber.name=Кусочек янтаря
+item.orechunks.biotite.name=Кусочек биотита
+item.orechunks.linium.name=Кусочек линиума
+item.orechunks.crystal.name=Кусочек кристалла
+item.orechunks.dark.name=Кусочек тьмы
+
+# Редкие металлы
+item.orechunks.gold.name=Кусочек золота
+item.orechunks.platinum.name=Кусочек платины
+item.orechunks.titanium.name=Кусочек титана
+item.orechunks.tungsten.name=Кусочек вольфрама
+item.orechunks.cobalt.name=Кусочек кобальта
+item.orechunks.ardite.name=Кусочек ардита
+item.orechunks.thorium.name=Кусочек тория
+item.orechunks.uranium.name=Кусочек урана
+item.orechunks.rutile.name=Кусочек рутила
+item.orechunks.dilithium.name=Кусочек дилития
+item.orechunks.lutetium.name=Кусочек лютеция
+item.orechunks.adamantium.name=Кусочек адамантия
+item.orechunks.crimsoniron.name=Кусочек багрового железа
+item.orechunks.deepiron.name=Кусочек глубинного железа
+item.orechunks.shadowiron.name=Кусочек теневого железа
+item.orechunks.astralsilver.name=Кусочек астрального серебра
+
+# Металлы Metallurgy
+item.orechunks.carmot.name=Кусочек кармота
+item.orechunks.ignatius.name=Кусочек игнатия
+item.orechunks.midasium.name=Кусочек мидасия
+item.orechunks.kalendrite.name=Кусочек календрита
+item.orechunks.alduorite.name=Кусочек алдуорита
+item.orechunks.ceruclase.name=Кусочек церукласа
+item.orechunks.oureclase.name=Кусочек оурекласа
+item.orechunks.infuscolium.name=Кусочек инфусколия
+item.orechunks.eximite.name=Кусочек эксимита
+item.orechunks.meutoite.name=Кусочек меутоита
+item.orechunks.rubracium.name=Кусочек рубрация
+item.orechunks.promethium.name=Кусочек прометия
+item.orechunks.pyridium.name=Кусочек пиридия
+item.orechunks.vulcanite.name=Кусочек вулканита
+item.orechunks.neridium.name=Кусочек неридия
+
+# Металлы измерений и модов
+item.orechunks.abyssalnite.name=Кусочек абиссалнита
+item.orechunks.ambrosium.name=Кусочек амброзия
+item.orechunks.atlarus.name=Кусочек атларуса
+item.orechunks.cincinnasite.name=Кусочек цинциннасита
+item.orechunks.foulite.name=Кусочек фаулита
+item.orechunks.lemurite.name=Кусочек лемурита
+item.orechunks.zanite.name=Кусочек занита
+item.orechunks.gravitite.name=Кусочек гравитита
+item.orechunks.desh.name=Кусочек деша
+item.orechunks.resonating.name=Кусочек резонирующей руды
+item.orechunks.rune.name=Кусочек руны
+item.orechunks.solar.name=Кусочек солярия
+item.orechunks.virox.name=Кусочек вирокса
+
+# Эпические металлы высшего уровня
+item.orechunks.iridium.name=Кусочек иридия
+item.orechunks.mithril.name=Кусочек мифрила
+item.orechunks.orichalcum.name=Кусочек орихалка
+item.orechunks.adamantine.name=Кусочек адамантина
+item.orechunks.sanguinite.name=Кусочек сангвинита
+item.orechunks.starsteel.name=Кусочек звёздной стали
+item.orechunks.astralstarmetal.name=Кусочек астрального звёздного металла
+item.orechunks.draconium.name=Кусочек дракония
+item.orechunks.yellorium.name=Кусочек иттория
+
+# Коралий (AbyssalCraft)
+item.orechunks.coralium.name=Кусочек коралия
+item.orechunks.coraliumpearl.name=Кусочек кораллового жемчуга
+item.orechunks.pearlescentcoralium.name=Кусочек перламутрового коралия
+item.orechunks.liquifiedcoralium.name=Кусочек сжиженного коралия
+
+# Самоцветы
+item.orechunks.emerald.name=Кусочек изумруда
+item.orechunks.ruby.name=Кусочек рубина
+item.orechunks.sapphire.name=Кусочек сапфира
+item.orechunks.peridot.name=Кусочек перидота
+item.orechunks.amethyst.name=Кусочек аметиста
+item.orechunks.aquamarine.name=Кусочек аквамарина
+item.orechunks.onyx.name=Кусочек оникса
+item.orechunks.anglesite.name=Кусочек англезита
+item.orechunks.benitoite.name=Кусочек бенитоита
+item.orechunks.certusquartz.name=Кусочек кварца Церус
+item.orechunks.chargedcertusquartz.name=Кусочек заряженного кварца Церус
+item.orechunks.arcanecrystal.name=Кусочек тайного кристалла
+item.orechunks.rockcrystal.name=Кусочек горного кристалла
+
+# Ванильные руды
+item.orechunks.coal.name=Кусочек угля
+item.orechunks.diamond.name=Кусочек алмаза
+item.orechunks.redstone.name=Кусочек редстоуна
+item.orechunks.lapis.name=Кусочек лазурита
+
+# Поздние добавления
+item.orechunks.topaz.name=Кусочек топаза
+item.orechunks.malachite.name=Кусочек малахита
+item.orechunks.tanzanite.name=Кусочек танзанита
+item.orechunks.shadow.name=Кусочек тени
+
+# Рудные блоки (в камне)
+tile.fortuneores.ore.coal.name=Угольная руда
+tile.fortuneores.ore.diamond.name=Алмазная руда
+tile.fortuneores.ore.redstone.name=Красная руда
+tile.fortuneores.ore.lapis.name=Лазуритовая руда
+tile.fortuneores.ore.emerald.name=Изумрудная руда
+tile.fortuneores.ore.ruby.name=Рубиновая руда
+tile.fortuneores.ore.topaz.name=Топазовая руда
+tile.fortuneores.ore.sapphire.name=Сапфировая руда
+tile.fortuneores.ore.iron.name=Железная руда
+tile.fortuneores.ore.gold.name=Золотая руда
+tile.fortuneores.ore.malachite.name=Малахитовая руда
+tile.fortuneores.ore.tanzanite.name=Танзанитовая руда
+tile.fortuneores.ore.shadow.name=Теневая руда
+tile.fortuneores.ore.draconium.name=Дракониевая руда
+
+# Рудные блоки (в глубинном сланце)
+tile.fortuneores.deepslate_ore.coal.name=Глубинная угольная руда
+tile.fortuneores.deepslate_ore.diamond.name=Глубинная алмазная руда
+tile.fortuneores.deepslate_ore.redstone.name=Глубинная красная руда
+tile.fortuneores.deepslate_ore.lapis.name=Глубинная лазуритовая руда
+tile.fortuneores.deepslate_ore.emerald.name=Глубинная изумрудная руда
+tile.fortuneores.deepslate_ore.ruby.name=Глубинная рубиновая руда
+tile.fortuneores.deepslate_ore.topaz.name=Глубинная топазовая руда
+tile.fortuneores.deepslate_ore.sapphire.name=Глубинная сапфировая руда
+tile.fortuneores.deepslate_ore.iron.name=Глубинная железная руда
+tile.fortuneores.deepslate_ore.gold.name=Глубинная золотая руда
+tile.fortuneores.deepslate_ore.malachite.name=Глубинная малахитовая руда
+tile.fortuneores.deepslate_ore.tanzanite.name=Глубинная танзанитовая руда
+tile.fortuneores.deepslate_ore.shadow.name=Глубинная теневая руда
+tile.fortuneores.deepslate_ore.draconium.name=Глубинная дракониевая руда
