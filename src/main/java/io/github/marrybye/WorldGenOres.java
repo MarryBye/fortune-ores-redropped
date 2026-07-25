@@ -17,8 +17,9 @@ import cpw.mods.fml.common.IWorldGenerator;
  * That single host-driven path means a vein straddling the stone/deepslate boundary still looks right on both sides,
  * and the same generator naturally produces netherrack ore in the Nether and end-stone ore in the End without any
  * dimension-specific placement code. Which dimensions an ore may generate in is gated per ore by its
- * {@code SpawnInOverworld/Nether/End} config toggles. All other parameters (height, vein size, veins per chunk) come
- * from each {@link Ore} and its config category.
+ * {@code SpawnInOverworld/Nether/End} toggles (or an explicit {@code DimensionIds} whitelist), and which biomes by its
+ * {@code Biomes} rules. All other parameters (height - per dimension if wanted -, vein size, veins per chunk and the
+ * per-vein chance) come from each {@link Ore} and its config category.
  */
 public class WorldGenOres implements IWorldGenerator {
 
@@ -31,11 +32,17 @@ public class WorldGenOres implements IWorldGenerator {
             if (!ore.enableOreGen) continue;
             if (!allowedInDimension(ore, dim)) continue;
 
-            int span = Math.max(1, ore.maxY - ore.minY + 1);
+            int minY = ore.minYFor(dim);
+            int span = Math.max(1, ore.maxYFor(dim) - minY + 1);
             for (int i = 0; i < ore.veinsPerChunk; i++) {
+                // Rarity beyond "one vein per chunk": most attempts of a rare ore place nothing at all.
+                if (ore.veinChance < 100 && random.nextInt(100) >= ore.veinChance) continue;
+
                 int x = chunkX * 16 + random.nextInt(16);
                 int z = chunkZ * 16 + random.nextInt(16);
-                int y = ore.minY + random.nextInt(span);
+                if (!allowedInBiome(ore, world, x, z)) continue;
+
+                int y = minY + random.nextInt(span);
 
                 generateVein(world, random, x, y, z, ore, ore.veinSize, dim);
             }
@@ -44,13 +51,33 @@ public class WorldGenOres implements IWorldGenerator {
 
     /**
      * Maps a dimension id onto the ore's per-dimension toggles: -1 is the Nether, 1 is the End, and everything else
-     * (the overworld plus modded stone/deepslate dimensions) uses the Overworld toggle. Host-aware placement then makes
-     * sure a vein only materialises where a matching terrain block actually exists.
+     * (the overworld plus modded stone/deepslate dimensions) uses the Overworld toggle. An ore with an explicit
+     * {@code DimensionIds} whitelist is matched against that instead. Host-aware placement then makes sure a vein only
+     * materialises where a matching terrain block actually exists.
      */
     private boolean allowedInDimension(Ore ore, int dim) {
+        if (ore.dimensionIds.length > 0) {
+            for (int id : ore.dimensionIds) {
+                if (id == dim) return true;
+            }
+            return false;
+        }
+
         if (dim == -1) return ore.spawnNether;
         if (dim == 1) return ore.spawnEnd;
         return ore.spawnOverworld;
+    }
+
+    /**
+     * Whether the vein's own column sits in a biome the ore accepts. The biome comes from the world's chunk manager
+     * rather than {@code World#getBiomeGenForCoords}: a vein may start near a chunk border and the manager answers
+     * straight from the biome generator, without needing the chunk at that position to be loaded.
+     */
+    private boolean allowedInBiome(Ore ore, World world, int x, int z) {
+        if (ore.biomes.isUnrestricted()) return true;
+        return ore.biomes.matches(
+            world.getWorldChunkManager()
+                .getBiomeGenAt(x, z));
     }
 
     /**

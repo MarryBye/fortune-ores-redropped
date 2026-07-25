@@ -24,13 +24,19 @@ import cpw.mods.fml.common.registry.GameRegistry;
 @Mod(modid = FortuneOres.MODID, name = FortuneOres.NAME, version = FortuneOres.VERSION)
 public class FortuneOres {
 
+    /**
+     * World-gen and reward defaults per tier. Veins are deliberately few per chunk - the mod can have dozens of ores
+     * enabled at once, so rarity is expressed through {@code veinChance} (how often an attempt places anything at all)
+     * and vein size rather than through stacking veins per chunk.
+     */
     public enum OreRarity {
 
-        // xpMin, xpMax, xpSmelt, then world-gen defaults: minY, maxY, veinSize, veinsPerChunk, harvestLevel.
-        COMMON(1, 4, 0.4f, 0, 80, 9, 12, 1),
-        UNCOMMON(2, 5, 0.6f, 0, 64, 8, 8, 1),
-        RARE(3, 7, 0.9f, 4, 32, 6, 4, 2),
-        EPIC(4, 8, 1.2f, 4, 24, 5, 2, 2);
+        // xpMin, xpMax, xpSmelt, then world-gen defaults: minY, maxY, veinSize, veinsPerChunk, veinChance,
+        // harvestLevel.
+        COMMON(1, 4, 0.4f, 0, 80, 12, 2, 100, 1),
+        UNCOMMON(2, 5, 0.6f, 0, 64, 9, 2, 70, 1),
+        RARE(3, 7, 0.9f, 4, 40, 6, 1, 45, 2),
+        EPIC(4, 8, 1.2f, 4, 24, 5, 1, 20, 3);
 
         public final int xpMin;
         public final int xpMax;
@@ -39,10 +45,11 @@ public class FortuneOres {
         public final int maxY;
         public final int veinSize;
         public final int veinsPerChunk;
+        public final int veinChance;
         public final int harvestLevel;
 
         OreRarity(int xpMin, int xpMax, float xpSmelt, int minY, int maxY, int veinSize, int veinsPerChunk,
-            int harvestLevel) {
+            int veinChance, int harvestLevel) {
             this.xpMin = xpMin;
             this.xpMax = xpMax;
             this.xpSmelt = xpSmelt;
@@ -50,6 +57,7 @@ public class FortuneOres {
             this.maxY = maxY;
             this.veinSize = veinSize;
             this.veinsPerChunk = veinsPerChunk;
+            this.veinChance = veinChance;
             this.harvestLevel = harvestLevel;
         }
     }
@@ -58,7 +66,7 @@ public class FortuneOres {
     /** Also the resource domain: every asset lives under {@code assets/fortuneores/}. */
     public static final String MODID = "fortuneores";
     public static final String NAME = "Fortune Ores Redropped";
-    public static final String VERSION = "1.0.8";
+    public static final String VERSION = "1.1.0";
     // Mod Info End
 
     // Singleton
@@ -203,6 +211,7 @@ public class FortuneOres {
         newOre.maxY = rarity.maxY;
         newOre.veinSize = rarity.veinSize;
         newOre.veinsPerChunk = rarity.veinsPerChunk;
+        newOre.veinChance = rarity.veinChance;
         newOre.harvestLevel = rarity.harvestLevel;
         newOre.addOreName(oreName);
         // The ingot/gem/dust names are derived from this at smelting time, in that priority order.
@@ -269,6 +278,48 @@ public class FortuneOres {
         ore.veinsPerChunk = veinsPerChunk;
     }
 
+    /** {@link #setVeins(int, int, int, int)} plus the per-attempt chance, which is the real rarity knob. */
+    public void setVeins(int minY, int maxY, int veinSize, int veinsPerChunk, int veinChance) {
+        setVeins(minY, maxY, veinSize, veinsPerChunk);
+        setVeinChance(veinChance);
+    }
+
+    /** Percent chance that each of the last-added ore's vein attempts places anything; see {@link Ore#veinChance}. */
+    public void setVeinChance(int veinChance) {
+        oreStorage.get(nextMeta - 1).veinChance = veinChance;
+    }
+
+    /**
+     * Restricts the last-added ore to certain biomes; see {@link BiomeFilter} for the rule syntax. This is only the
+     * default - the ore's {@code Biomes} config list replaces it wholesale, and clearing that list lifts the
+     * restriction.
+     */
+    public void setBiomes(String... rules) {
+        oreStorage.get(nextMeta - 1).biomeRules = rules;
+    }
+
+    /** Overrides the pickaxe tier the last-added ore needs (0 = wood, 1 = stone, 2 = iron, 3 = diamond). */
+    public void setHarvestLevel(int harvestLevel) {
+        oreStorage.get(nextMeta - 1).harvestLevel = harvestLevel;
+    }
+
+    /** Nether-only height band for the last-added ore, which is a solid 128-block mass rather than a thin crust. */
+    public void setNetherHeight(int minY, int maxY) {
+        Ore ore = oreStorage.get(nextMeta - 1);
+        ore.netherMinY = minY;
+        ore.netherMaxY = maxY;
+    }
+
+    /**
+     * End-only height band for the last-added ore. Needed by every ore meant to appear in the End: the islands there
+     * float around y40-75, so an ore left at a normal Overworld band (y4-32) would never find end stone to sit in.
+     */
+    public void setEndHeight(int minY, int maxY) {
+        Ore ore = oreStorage.get(nextMeta - 1);
+        ore.endMinY = minY;
+        ore.endMaxY = maxY;
+    }
+
     /**
      * Also makes the given vanilla ore block(s) drop the last-added ore's chunk, on top of its ore-dictionary matching.
      * Used for vanilla ores (e.g. emerald) whose block drops a finished item and therefore cannot be matched through
@@ -296,6 +347,10 @@ public class FortuneOres {
         int harvestLevel, Block... blocks) {
         Ore ore = new Ore(oreName, nextMeta, xpDropMin, xpDropMax, xpSmelt);
         ore.isVanilla = true;
+        // Even though a vanilla ore is matched by block instance rather than through the ore dictionary, it still needs
+        // its ore-dictionary names: they are what this mod's own generated ore blocks are registered under (oreDiamond,
+        // oreCoal, ...) in addBlockOreDicting, and what lets the suppressor recognise a modded ore of the same type.
+        ore.addOreName(oreName);
         ore.vanillaBlocks = blocks;
         ore.vanillaSmeltResult = smeltResult;
         ore.dropCount = dropMin;
@@ -311,14 +366,32 @@ public class FortuneOres {
         nextMeta++;
     }
 
+    /**
+     * The mod's ore catalogue. Only a fraction of it is enabled out of the box (see {@code Config.DEFAULT_REPLACE});
+     * the rest waits for the player to switch it on, which is why every ore still carries a full set of world-gen
+     * defaults.
+     *
+     * <p>
+     * The shipped balance: the ores a modpack's progression is built on (coal, iron, copper, tin, aluminium, osmium,
+     * gold, redstone, lapis, diamond, the certus quartzes, draconium) generate in every biome, and only their vein size
+     * and per-attempt chance separate common from rare. Everything that is flavour rather than progression - the gems,
+     * the Thaumcraft infused ores, the Nether metals - is keyed to the biomes it thematically belongs in, so exploring
+     * a new biome is what opens up a new material. Nether-only materials get their biome rule rather than a dimension
+     * switch, so they also appear in modded Nether-tagged biomes.
+     */
     private void setupOres() {
         // ---- Common metals ----------------------------------------------------------------------------------------
         addUniversalOre("Copper", OreRarity.COMMON);
+        setVeins(0, 80, 10, 2, 100);
         addUniversalOre("Iron", OreRarity.COMMON);
+        setVeins(0, 80, 10, 2, 100);
         addUniversalOre("Tin", OreRarity.COMMON);
+        setVeins(0, 80, 9, 2, 90);
         addUniversalOre("Lead", OreRarity.COMMON);
         addUniversalOre("Osmium", OreRarity.COMMON);
+        setVeins(0, 72, 8, 1, 70);
         addUniversalOre("Aluminum", OreRarity.COMMON);
+        setVeins(0, 72, 9, 1, 80);
         addAlias("Aluminium", "NaturalAluminum");
         addUniversalOre("Bauxite", OreRarity.COMMON);
         addUniversalOre("Silicon", OreRarity.COMMON);
@@ -339,6 +412,10 @@ public class FortuneOres {
         // Thaumcraft packs its ores into one "blockCustomOre" (0 = cinnabar, 1-6 = infused stone, 7 = amber-bearing
         // stone), so each is pinned down by metadata; the six infused ones are handled further down.
         addForeignBlock("Thaumcraft:blockCustomOre:0");
+        // A hydrothermal mineral: hot, volcanic and barren ground, and the Nether is nothing but that.
+        setVeins(4, 40, 5, 1, 45);
+        setBiomes("type:HOT", "type:MOUNTAIN", "type:WASTELAND", "type:NETHER");
+        setNetherHeight(32, 110); // above the lava sea, where a player actually walks
         addUniversalOre("Pyrite", OreRarity.UNCOMMON);
         addUniversalOre("Apatite", OreRarity.UNCOMMON);
         addUniversalOre("Saltpeter", OreRarity.UNCOMMON);
@@ -348,6 +425,9 @@ public class FortuneOres {
         // back into that amber through the ore dictionary's "gemAmber".
         addUniversalOre("Amber", OreRarity.UNCOMMON);
         addForeignBlock("Thaumcraft:blockCustomOre:7");
+        // Fossil resin, so it follows the forests - conifers above all - and sits shallow.
+        setVeins(8, 45, 4, 1, 40);
+        setBiomes("type:FOREST", "type:CONIFEROUS", "type:SPOOKY", "type:SWAMP");
         addUniversalOre("Biotite", OreRarity.UNCOMMON);
         addUniversalOre("Linium", OreRarity.UNCOMMON);
         addUniversalOre("Crystal", OreRarity.UNCOMMON);
@@ -355,16 +435,32 @@ public class FortuneOres {
 
         // ---- Rare metals ------------------------------------------------------------------------------------------
         addUniversalOre("Gold", OreRarity.RARE);
+        setVeins(0, 34, 8, 1, 70);
         addUniversalOre("Platinum", OreRarity.RARE);
         addUniversalOre("Titanium", OreRarity.RARE);
         addUniversalOre("Tungsten", OreRarity.RARE);
         addAlias("Wolfram");
+        // Cobalt and ardite are Nether materials and stay that way: the biome rule (rather than SpawnInNether alone)
+        // also covers modded Nether-tagged biomes, and both want a diamond pickaxe like they do in Tinkers' Construct.
         addUniversalOre("Cobalt", OreRarity.RARE);
+        setVeins(8, 110, 6, 1, 45);
+        setBiomes("type:NETHER");
+        setHarvestLevel(3);
         addUniversalOre("Ardite", OreRarity.RARE);
+        setVeins(8, 110, 6, 1, 45);
+        setBiomes("type:NETHER");
+        setHarvestLevel(3);
         addUniversalOre("Thorium", OreRarity.RARE);
         addUniversalOre("Uranium", OreRarity.RARE);
         addUniversalOre("Rutile", OreRarity.RARE);
+        // Rutile is a heavy beach sand mineral, so it washes up along shores and dry river country.
+        setVeins(4, 40, 5, 1, 40);
+        setBiomes("type:BEACH", "type:SANDY", "type:MESA", "type:RIVER");
         addUniversalOre("Dilithium", OreRarity.RARE);
+        // A crystal, not a metal: cold, magical and outer-dimensional ground.
+        setVeins(4, 32, 4, 1, 25);
+        setBiomes("type:END", "type:MAGICAL", "type:COLD");
+        setEndHeight(40, 75);
         addUniversalOre("Lutetium", OreRarity.RARE);
         addUniversalOre("Adamantium", OreRarity.RARE);
         addUniversalOre("CrimsonIron", OreRarity.RARE);
@@ -413,6 +509,10 @@ public class FortuneOres {
 
         // ---- Epic / high-tier metals ------------------------------------------------------------------------------
         addUniversalOre("Iridium", OreRarity.EPIC);
+        // Iridium is a meteorite metal on Earth, so it belongs to the scarred, lifeless ground and to the End.
+        setVeins(4, 24, 3, 1, 15);
+        setBiomes("type:MESA", "type:WASTELAND", "type:END");
+        setEndHeight(40, 75);
         addUniversalOre("Mithril", OreRarity.EPIC);
         addAlias("Mythril");
         addUniversalOre("Orichalcum", OreRarity.EPIC);
@@ -427,6 +527,11 @@ public class FortuneOres {
         addAlias("Starmetal");
         addUniversalOre("Draconium", OreRarity.EPIC);
         addAlias("DraconiumEnd");
+        // Progression gate rather than flavour, so no biome rule - it is scarce (a vein about every fourth chunk, deep)
+        // but reachable everywhere, and one block is worth mining for the 2-8 chunks it pays out.
+        setVeins(4, 28, 6, 1, 25);
+        setDrops(2, 8);
+        setEndHeight(40, 75); // Draconic Evolution's own draconium is an End ore too
         addUniversalOre("Yellorium", OreRarity.EPIC);
         addAlias("Yellorite");
 
@@ -444,10 +549,22 @@ public class FortuneOres {
         // Vanilla emerald ore drops a finished emerald item, so it is matched by block instance (like coal/diamond) in
         // addition to the ore-dictionary matching above; mining it yields the emerald chunk.
         addVanillaBlock(Blocks.emerald_ore);
+        // Kept to the mountains vanilla puts it in, and in single blocks rather than veins (size 3 lands 1-2).
+        setVeins(4, 34, 3, 1, 50);
+        setBiomes("type:MOUNTAIN", "type:HILLS");
         addUniversalOre("Ruby", OreRarity.RARE);
+        // The gems are coloured by where they come from: red for heat and dry stone...
+        setVeins(4, 32, 4, 1, 40);
+        setBiomes("type:HOT", "type:MESA", "type:SANDY");
         addUniversalOre("Sapphire", OreRarity.RARE);
+        // ...blue for cold and water...
+        setVeins(4, 32, 4, 1, 40);
+        setBiomes("type:COLD", "type:SNOWY", "type:WATER");
         addUniversalOre("Peridot", OreRarity.RARE);
         addAlias("Olivine");
+        // ...and green for everything that grows.
+        setVeins(4, 32, 4, 1, 40);
+        setBiomes("type:FOREST", "type:JUNGLE", "type:SWAMP");
         addUniversalOre("Amethyst", OreRarity.RARE);
         addUniversalOre("Aquamarine", OreRarity.RARE);
         addUniversalOre("Onyx", OreRarity.RARE);
@@ -463,12 +580,12 @@ public class FortuneOres {
         setTexture("certus_quartz");
         addForeignBlock("appliedenergistics2:tile.OreQuartz");
         setDrops(2, 4);
-        setVeins(0, 40, 8, 10);
+        setVeins(0, 40, 8, 2, 90);
         addUniversalOre("ChargedCertusQuartz", OreRarity.RARE, "crystalChargedCertusQuartz");
         setTexture("charged_certus_quartz");
         addForeignBlock("appliedenergistics2:tile.OreQuartzCharged");
-        setDrops(2, 4);
-        setVeins(0, 40, 3, 3);
+        setDrops(1, 2);
+        setVeins(0, 40, 3, 1, 25);
         addUniversalOre("ArcaneCrystal", OreRarity.RARE);
         setTexture("arcane_crystal");
         addUniversalOre("RockCrystal", OreRarity.RARE);
@@ -481,13 +598,16 @@ public class FortuneOres {
         // config.
         // Trailing args after smeltCount: xpDropMin, xpDropMax, minY, maxY, veinSize, veinsPerChunk, harvestLevel,
         // then the vanilla block(s). Mining XP mirrors vanilla; the vein tuning is the mod's historical world-gen.
-        addVanillaOre("Coal", new ItemStack(Items.coal), 0.1f, 1, 1, 1, 0, 2, 0, 128, 17, 20, 0, Blocks.coal_ore);
-        addVanillaOre("Diamond", new ItemStack(Items.diamond), 0.5f, 1, 1, 1, 3, 7, 1, 16, 8, 1, 2, Blocks.diamond_ore);
+        // The vanilla four are the backbone, so they keep vanilla's height bands and stay in every biome; only the vein
+        // counts are brought in line with the rest of the mod (few attempts per chunk, rarity through the chance).
+        addVanillaOre("Coal", new ItemStack(Items.coal), 0.1f, 1, 1, 1, 0, 2, 0, 128, 12, 2, 0, Blocks.coal_ore);
+        addVanillaOre("Diamond", new ItemStack(Items.diamond), 0.5f, 1, 1, 1, 3, 7, 1, 16, 6, 1, 2, Blocks.diamond_ore);
+        setVeinChance(60);
         addVanillaOre(
             "Redstone",
             new ItemStack(Items.redstone),
             0.1f,
-            4,
+            2,
             8,
             1,
             1,
@@ -495,18 +615,29 @@ public class FortuneOres {
             1,
             16,
             8,
-            8,
+            1,
             2,
             Blocks.redstone_ore,
             Blocks.lit_redstone_ore);
-        addVanillaOre("Lapis", new ItemStack(Items.dye, 1, 4), 0.1f, 4, 8, 1, 2, 5, 1, 31, 7, 1, 1, Blocks.lapis_ore);
+        setVeinChance(80);
+        addVanillaOre("Lapis", new ItemStack(Items.dye, 1, 4), 0.1f, 2, 8, 1, 2, 5, 1, 31, 7, 1, 1, Blocks.lapis_ore);
+        setVeinChance(60);
 
         // ---- Later additions (always append; inserting mid-list would shift existing chunk metadata) ---------------
         addUniversalOre("Topaz", OreRarity.RARE); // Ruby/Sapphire/Emerald already exist above
+        // Golden gem: the dry, sun-bleached biomes.
+        setVeins(4, 32, 4, 1, 40);
+        setBiomes("type:SANDY", "type:MESA", "type:SAVANNA");
 
         // Biomes O' Plenty gems (ore/gem dictionary: oreMalachite/gemMalachite, oreTanzanite/gemTanzanite).
         addUniversalOre("Malachite", OreRarity.RARE);
+        // Weathered copper carbonate - it needs water working on the rock, so the wet biomes.
+        setVeins(4, 36, 5, 1, 45);
+        setBiomes("type:SWAMP", "type:WET", "type:JUNGLE");
         addUniversalOre("Tanzanite", OreRarity.RARE);
+        // Named after the one place on Earth it occurs, in the shadow of a mountain.
+        setVeins(4, 32, 4, 1, 40);
+        setBiomes("type:MOUNTAIN", "type:HILLS", "type:SAVANNA");
         // Tainted Magic Shadow Ore. Expected ore-dict "oreShadow"; smelt result is matched as gem/dust/ingot Shadow.
         // If that mod uses a different ore-dictionary name, nothing breaks - the chunk simply won't match until the
         // name is added here (see addOreName/addSmeltName below).
@@ -519,7 +650,10 @@ public class FortuneOres {
         // also matched to the vanilla nether-quartz ore block, so if foreign ore generation is re-enabled, mining that
         // block yields our chunk too. Args after smeltCount: xpDropMin, xpDropMax, minY, maxY, veinSize, veinsPerChunk,
         // harvestLevel, then the vanilla block(s).
-        addVanillaOre("Quartz", new ItemStack(Items.quartz), 0.2f, 1, 2, 1, 2, 5, 10, 118, 14, 8, 0, Blocks.quartz_ore);
+        addVanillaOre("Quartz", new ItemStack(Items.quartz), 0.2f, 1, 2, 1, 2, 5, 10, 118, 12, 2, 0, Blocks.quartz_ore);
+        // Nether quartz stays a Nether material; the biome rule also catches modded Nether-tagged biomes, and it keeps
+        // the ore out of the End, which SpawnInNether alone would not.
+        setBiomes("type:NETHER");
 
         // ---- Thaumcraft infused ores (one per primal aspect) -------------------------------------------------------
         // Thaumcraft has no ore-dictionary name for these, so "oreInfusedAir" and friends are this mod's own; the six
@@ -528,36 +662,46 @@ public class FortuneOres {
         // air, fire, water, earth, order, entropy - each drops the matching primal shard, which is what a chunk smelts
         // back into ("shardAir", ...), with the usual ingot/gem/dust lookup behind it. They all drop 2-3 shards, and
         // generate up to y=30 in every dimension.
+        // Each aspect is also keyed to the ground that aspect belongs to, so a thaumaturge has to travel for a full set
+        // of primal shards rather than strip-mine one hill.
         addUniversalOre("InfusedAir", OreRarity.RARE, "shardAir");
         setTexture("infused_air");
         addForeignBlock("Thaumcraft:blockCustomOre:1");
         setDrops(2, 3);
-        setVeins(0, 30, 4, 2);
+        setVeins(0, 30, 4, 1, 35);
+        setBiomes("type:MOUNTAIN", "type:HILLS", "type:PLAINS");
         addUniversalOre("InfusedFire", OreRarity.RARE, "shardFire");
         setTexture("infused_fire");
         addForeignBlock("Thaumcraft:blockCustomOre:2");
         setDrops(2, 3);
-        setVeins(0, 30, 4, 2);
+        setVeins(0, 30, 4, 1, 35);
+        setBiomes("type:HOT", "type:NETHER", "type:MESA", "type:SANDY");
+        setNetherHeight(32, 110);
         addUniversalOre("InfusedWater", OreRarity.RARE, "shardWater");
         setTexture("infused_water");
         addForeignBlock("Thaumcraft:blockCustomOre:3");
         setDrops(2, 3);
-        setVeins(0, 30, 4, 2);
+        setVeins(0, 30, 4, 1, 35);
+        setBiomes("type:WATER", "type:SWAMP", "type:BEACH", "type:WET");
         addUniversalOre("InfusedEarth", OreRarity.RARE, "shardEarth");
         setTexture("infused_earth");
         addForeignBlock("Thaumcraft:blockCustomOre:4");
         setDrops(2, 3);
-        setVeins(0, 30, 4, 2);
+        setVeins(0, 30, 4, 1, 35);
+        setBiomes("type:FOREST", "type:JUNGLE", "type:DENSE", "type:MUSHROOM");
         addUniversalOre("InfusedOrder", OreRarity.RARE, "shardOrder");
         setTexture("infused_order");
         addForeignBlock("Thaumcraft:blockCustomOre:5");
         setDrops(2, 3);
-        setVeins(0, 30, 4, 2);
+        setVeins(0, 30, 4, 1, 35);
+        setBiomes("type:MAGICAL", "type:SNOWY", "type:COLD", "type:MUSHROOM");
         addUniversalOre("InfusedEntropy", OreRarity.RARE, "shardEntropy");
         setTexture("infused_entropy");
         addForeignBlock("Thaumcraft:blockCustomOre:6");
         setDrops(2, 3);
-        setVeins(0, 30, 4, 2);
+        setVeins(0, 30, 4, 1, 35);
+        setBiomes("type:WASTELAND", "type:DEAD", "type:SPOOKY", "type:END");
+        setEndHeight(40, 75);
     }
 
     private void addOreDicting() {
@@ -575,7 +719,7 @@ public class FortuneOres {
             if (doOreDict) {
                 ItemStack chunk = new ItemStack(itemChunk, 1, ore.meta);
                 for (String oreName : ore.oreNames) {
-                    if (!oreName.contains("Nether")) OreDictionary.registerOre(oreName, chunk);
+                    if (!oreName.contains("Nether")) registerOreOnce(oreName, chunk);
                 }
             }
         }
@@ -589,20 +733,56 @@ public class FortuneOres {
      * block placed in the world. Every alias already collected in {@link Ore#oreNames} (e.g. oreMithril + oreMythril,
      * oreAluminum + oreAluminium) is used, so the block matches whichever spelling a scanning mod expects. The legacy
      * "oreNether*" variants are skipped, matching {@link #addOreDicting()}.
+     *
+     * <p>
+     * The deepslate variant is registered under {@code oreDeepslate*} on top of the plain {@code ore*} name, which is
+     * how Et Futurum Requiem names its own deepslate ores - a modpack recipe or scanner written against those names
+     * therefore matches this mod's deepslate ores too.
      */
     private void addBlockOreDicting() {
         for (Ore ore : oreStorage) {
             if (!ore.enabled) continue;
+
+            // No ore may ship without an ore-dictionary name: it would be invisible to every other mod (and to this
+            // mod's own suppressor). Anything reaching this is a missing addOreName in setupOres().
+            if (ore.oreNames.isEmpty()) {
+                FMLLog.severe("[FortuneOres] Ore '%s' has no ore-dictionary name and stays untagged.", ore.name);
+                continue;
+            }
 
             int offset = ore.meta % BlockFortuneOre.GROUP_SIZE;
             for (String oreName : ore.oreNames) {
                 if (oreName.contains("Nether")) continue;
                 for (OreHost host : OreHost.values()) {
                     Block block = host.blockFor(ore);
-                    if (block != null) OreDictionary.registerOre(oreName, new ItemStack(block, 1, offset));
+                    if (block == null) continue;
+
+                    registerOreOnce(oreName, new ItemStack(block, 1, offset));
+                    if (host == OreHost.DEEPSLATE) {
+                        registerOreOnce(deepslateOreName(oreName), new ItemStack(block, 1, offset));
+                    }
                 }
             }
         }
+    }
+
+    /** "oreDiamond" -&gt; "oreDeepslateDiamond", the name Et Futurum Requiem gives a deepslate ore variant. */
+    private static String deepslateOreName(String oreName) {
+        return "oreDeepslate" + oreName.substring("ore".length());
+    }
+
+    /**
+     * Registers {@code stack} under an ore-dictionary name unless that exact item and metadata is already registered
+     * there. Two paths ore-dict the chunks - {@link #addOreDicting()} and {@link OreDictHandler}, which fires again for
+     * every name {@link #addBlockOreDicting()} registers - and Forge's own {@code registerOre} does not deduplicate, so
+     * without this the same name is listed twice on the item.
+     */
+    public static void registerOreOnce(String oreName, ItemStack stack) {
+        for (ItemStack existing : OreDictionary.getOres(oreName)) {
+            if (existing == null) continue;
+            if (existing.getItem() == stack.getItem() && existing.getItemDamage() == stack.getItemDamage()) return;
+        }
+        OreDictionary.registerOre(oreName, stack);
     }
 
     /**

@@ -1,7 +1,6 @@
 package io.github.marrybye;
 
 import net.minecraft.item.ItemStack;
-import net.minecraftforge.oredict.OreDictionary;
 import net.minecraftforge.oredict.OreDictionary.OreRegisterEvent;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -33,12 +32,12 @@ public class OreDictHandler {
         for (String oreName : ore.oreNames) {
             if (FortuneOres.allowProcessing) {
                 if (!oreName.contains("Nether") && !oreName.contains("dense"))
-                    OreDictionary.registerOre(oreName, chunk);
+                    FortuneOres.registerOreOnce(oreName, chunk);
             } else {
                 String dustName = oreName.replace("ore", "")
                     .replace("dense", "")
                     .replace("Nether", "");
-                OreDictionary.registerOre("dust" + dustName, chunk);
+                FortuneOres.registerOreOnce("dust" + dustName, chunk);
             }
         }
     }

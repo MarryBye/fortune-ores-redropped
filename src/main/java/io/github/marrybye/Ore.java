@@ -24,12 +24,51 @@ public class Ore {
     public int maxY = 32;
     public int veinSize = 6;
     public int veinsPerChunk = 3;
+    /**
+     * Percent chance that each of the {@link #veinsPerChunk} attempts actually places a vein. This is what separates a
+     * common ore from a rare one without dropping {@code veinsPerChunk} to zero: 25 with one vein per chunk means a
+     * vein roughly every fourth chunk.
+     */
+    public int veinChance = 100;
     /** Per-dimension toggles: Overworld also covers modded stone/deepslate dimensions; Nether = -1; End = 1. */
     public boolean spawnOverworld = true;
     public boolean spawnNether = true;
     public boolean spawnEnd = true;
+    /**
+     * Exact dimension ids this ore may generate in. When empty the three {@code spawn*} toggles decide, which is what
+     * lets one switch cover "the Overworld and every modded stone dimension"; a non-empty list is an exact whitelist
+     * and overrides them.
+     */
+    public int[] dimensionIds = new int[0];
+    /**
+     * Height overrides for the Nether and the End, {@code -1} meaning "use {@link #minY}/{@link #maxY}". The Nether and
+     * the End are 128-block-tall solid masses, so an ore worth putting at y4-32 in the Overworld usually wants a much
+     * wider band there.
+     */
+    public int netherMinY = -1;
+    public int netherMaxY = -1;
+    public int endMinY = -1;
+    public int endMaxY = -1;
+    /** Biome restriction, parsed from {@link #biomeRules}; unrestricted (and free) until rules are given. */
+    public BiomeFilter biomes = BiomeFilter.unrestricted();
+    /** The raw biome rules, both the built-in default and whatever the config ends up holding. */
+    public String[] biomeRules = new String[0];
     /** Pickaxe tier required to harvest the generated ore block (0 = wood, 1 = stone, 2 = iron, 3 = diamond). */
     public int harvestLevel = 1;
+
+    /** Lowest generation height in the given dimension, honouring the Nether/End overrides. */
+    public int minYFor(int dimensionId) {
+        if (dimensionId == -1 && netherMinY >= 0) return netherMinY;
+        if (dimensionId == 1 && endMinY >= 0) return endMinY;
+        return minY;
+    }
+
+    /** Highest generation height in the given dimension, honouring the Nether/End overrides. */
+    public int maxYFor(int dimensionId) {
+        if (dimensionId == -1 && netherMaxY >= 0) return netherMaxY;
+        if (dimensionId == 1 && endMaxY >= 0) return endMaxY;
+        return maxY;
+    }
 
     /** Lower bound of chunks dropped when the ore is mined (before Fortune). */
     public int dropCount;

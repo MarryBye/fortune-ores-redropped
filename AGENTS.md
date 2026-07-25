@@ -19,7 +19,9 @@
 
 ## Mod-specific conventions
 - `src/main/resources/mcmod.info` is still used for metadata; keep it aligned with `modId`, `modName`, and `minecraftVersion` when renaming.
-- Ore dictionary mirroring happens in `OreDictHandler.Handle(OreRegisterEvent)`; it maps registered ore names back to `Ore` instances and registers chunk stacks.
+- Ore dictionary mirroring happens in `OreDictHandler.Handle(OreRegisterEvent)`; it maps registered ore names back to `Ore` instances and registers chunk stacks. Register through `FortuneOres.registerOreOnce` rather than `OreDictionary.registerOre` - the chunks are reached by two paths and Forge does not deduplicate.
+- Every ore must have at least one `Ore#oreNames` entry (`addOreName`), including the `addVanillaOre` ones: those names are what `FortuneOres.addBlockOreDicting()` registers the generated ore blocks under, and what `OreGenSuppressor` matches modded ores by. `addBlockOreDicting` logs a `severe` line for any enabled ore that has none.
+- The deepslate host's blocks are additionally registered as `oreDeepslate*` (Et Futurum Requiem's naming) on top of the plain `ore*` name.
 - Drop replacement lives in the static `OreSwapper.swapDrops(...)`; silk touch is preserved and XP is spawned from the matched ore entry.
 - An ore block is recognised by the mined block itself (instance + metadata), not by what it drops, so ores dropping a finished item (Thaumcraft's amber, Biomes O' Plenty's gems) are swapped too. The table is built from the ore dictionary, `Ore#vanillaBlocks` and `Ore#foreignBlockIds`; matching the dropped stack through the ore dictionary remains a fallback.
 - `Ore#foreignBlockIds` holds `"modid:block[:meta]"` ids for ores the ore dictionary cannot describe, resolved in `FortuneOres.resolveForeignBlocks()` as a soft dependency and overridable through the `ForeignOreBlocks` config list.
@@ -27,6 +29,8 @@
 - It has two entry points: the `MixinBlock` injection into `Block#getDrops` (covers machine miners such as Mekanism's Digital Miner, which never fire a harvest event) and `OreSwapper.SwapOres(HarvestDropsEvent)` (fallback for blocks that override `getDrops`, plus the bonus XP). Both are idempotent - whichever runs first wins.
 - `allowProcessing` in `Config` changes whether ore chunks are registered as ores or as `dust*` entries.
 - `ItemChunk` expects `nextMeta` and `oreStorage` to stay in sync; add new ores by appending to `setupOres()` rather than reordering existing entries.
+- World-gen shape per ore: height (`OreMinY`/`OreMaxY`, with `NetherMinY`/`EndMinY`/... overrides), `OreVeinSize`, `OreVeinsPerChunk` and `OreVeinChance` - the percentage is the rarity knob, since dozens of ores can be enabled at once and stacking veins per chunk carpets the world. Seed defaults from `OreRarity` and override per ore with `setVeins`/`setVeinChance`/`setBiomes`/`setHarvestLevel`/`setNetherHeight`/`setEndHeight` next to the ore's declaration.
+- Biome restrictions are parsed by `BiomeFilter` from each ore's `Biomes` list (`type:MOUNTAIN`, a biome name, `id:35`, `!` to exclude). An ore meant to appear in the End needs `setEndHeight(40, 75)` - the islands float there, so a normal Overworld band never finds end stone.
 - Ore aliases are encoded directly in `setupOres()` with extra names like `Aluminium`, `Mythril`, and `Titanium`.
 - Item textures live under `src/main/resources/assets/fortuneores/textures/items/` and are named after the ore key in lowercase; `mysteriouschunk.png` is the fallback.
 
