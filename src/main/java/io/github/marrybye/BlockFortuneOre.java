@@ -37,6 +37,9 @@ public class BlockFortuneOre extends Block {
     private final int group;
     @SideOnly(Side.CLIENT)
     private IIcon[] icons;
+    /** Stands in for the metadata values this block carries no icon for; see {@link #registerBlockIcons}. */
+    @SideOnly(Side.CLIENT)
+    private IIcon fallbackIcon;
 
     public BlockFortuneOre(OreHost host, int group) {
         super(Material.rock);
@@ -80,7 +83,7 @@ public class BlockFortuneOre extends Block {
         int m = clampMeta(meta);
 
         Ore ore = oreForOffset(m);
-        if (ore == null || !ore.enabled) {
+        if (ore == null || !ore.isActive()) {
             // Chunk disabled/unknown: fall back to dropping the ore block itself so nothing is lost.
             drops.add(new ItemStack(this, 1, m));
             return drops;
@@ -101,17 +104,29 @@ public class BlockFortuneOre extends Block {
     @SideOnly(Side.CLIENT)
     @Override
     public void registerBlockIcons(IIconRegister reg) {
+        // The host's own terrain texture covers the metadata values with no icon of their own - an ore switched off
+        // after its blocks were already generated, or an unused slot in the last group. It is a vanilla texture the
+        // atlas already holds, so the stand-in costs nothing.
+        fallbackIcon = reg.registerIcon(host.fallbackTexture());
         icons = new IIcon[GROUP_SIZE];
         for (int i = 0; i < GROUP_SIZE; i++) {
             Ore ore = oreForOffset(i);
-            if (ore != null) icons[i] = reg.registerIcon(FortuneOres.MODID + ":" + host.infix + "_" + ore.texture);
+            // Only the ores this host actually generates: four host variants of a hundred-odd ores is more than the
+            // block atlas should carry for materials the world generator will never place.
+            if (ore != null && ore.usesHost(host)) {
+                icons[i] = reg.registerIcon(FortuneOres.MODID + ":" + host.infix + "_" + ore.texture);
+            }
         }
     }
 
     @SideOnly(Side.CLIENT)
     @Override
     public IIcon getIcon(int side, int meta) {
-        return icons[clampMeta(meta)];
+        // Null until registerBlockIcons has run; asked for by anything rendering a block before the atlas is stitched.
+        if (icons == null) return fallbackIcon;
+
+        IIcon icon = icons[clampMeta(meta)];
+        return icon != null ? icon : fallbackIcon;
     }
 
     /** Unlocalized suffix (the ore name) for an item stack of this block, used by {@link ItemBlockFortuneOre}. */
@@ -125,7 +140,9 @@ public class BlockFortuneOre extends Block {
     @Override
     public void getSubBlocks(Item item, CreativeTabs tab, List list) {
         for (int i = 0; i < GROUP_SIZE; i++) {
-            if (oreForOffset(i) != null) list.add(new ItemStack(item, 1, i));
+            Ore ore = oreForOffset(i);
+            // Only the materials this block really carries; the rest have no icon and no place in the world.
+            if (ore != null && ore.usesHost(host)) list.add(new ItemStack(item, 1, i));
         }
     }
 }

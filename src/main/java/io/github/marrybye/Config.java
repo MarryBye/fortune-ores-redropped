@@ -1,79 +1,39 @@
 package io.github.marrybye;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import net.minecraftforge.common.config.Configuration;
 
+/**
+ * Reads the config file into the ore catalogue.
+ *
+ * <p>
+ * Out of the box every ore is on as a <em>raw ore</em> ({@code EnableRawOre}) and none of them generates
+ * ({@code EnableOreGen}): mining any mod's copper ore hands out this mod's copper chunk, while the world keeps exactly
+ * the ore generation the pack already had. World generation is what a player opts into per ore. That default is only
+ * as broad as it looks because it is paired with {@code RequireRegisteredMaterial}: an ore whose material nothing in
+ * the pack provides is dropped entirely, so "every ore on" really means "every ore the pack can do something with".
+ */
 public class Config {
-
-    /**
-     * Ores fully replaced out of the box (both EnableRawOre and EnableOreGen on): the vanilla Minecraft ores, the
-     * metals
-     * a modpack's progression usually runs on, and the materials this mod ships tuned world-gen and biome placement for
-     * rather than merely recognising - the two Applied Energistics quartzes, the six Thaumcraft infused ores, the two
-     * Tinkers' Nether metals and the gems. Every other ore ships off so the player opts in to exactly what they want
-     * instead of switching off dozens of variants; an ore whose providing mod is absent simply generates this mod's own
-     * block, which still smelts into whatever the pack does have. Matched case-insensitively against {@link Ore#name},
-     * and each ore's vein shape, biomes and drop range live next to its declaration in {@code FortuneOres#setupOres}.
-     */
-    private static final Set<String> DEFAULT_REPLACE = new HashSet<String>(
-        Arrays.asList(
-            // Vanilla and the industrial backbone - no biome restriction, every pack needs these everywhere.
-            "coal",
-            "iron",
-            "copper",
-            "tin",
-            "gold",
-            "lapis",
-            "redstone",
-            "diamond",
-            "quartz",
-            "aluminum",
-            "osmium",
-            // Applied Energistics.
-            "certusquartz",
-            "chargedcertusquartz",
-            // High tier gates.
-            "draconium",
-            "iridium",
-            "dilithium",
-            // Tinkers' Construct Nether metals.
-            "cobalt",
-            "ardite",
-            // Gems, spread across the biomes they thematically belong to.
-            "emerald",
-            "ruby",
-            "sapphire",
-            "peridot",
-            "topaz",
-            "malachite",
-            "tanzanite",
-            "amber",
-            "cinnabar",
-            "rutile",
-            // Thaumcraft infused ores, one biome theme per primal aspect.
-            "infusedair",
-            "infusedfire",
-            "infusedwater",
-            "infusedearth",
-            "infusedorder",
-            "infusedentropy"));
-
-    /**
-     * Ores that default to EnableRawOre only: mined for chunks wherever their own mod puts them, but neither generated
-     * nor suppressed by us. Nothing ships this way at the moment - it is the middle setting a player picks per ore when
-     * they want another mod's world generation left intact.
-     */
-    private static final Set<String> DEFAULT_RAW_ONLY = new HashSet<String>();
 
     public Config(Configuration config) {
         config.load();
 
         FortuneOres.allowProcessing = config.get("AAAGeneral", "AllowProcessing", true)
+            .getBoolean(true);
+
+        FortuneOres.requireRegisteredMaterial = config.get(
+            "AAAGeneral",
+            "RequireRegisteredMaterial",
+            true,
+            "Drop an ore entirely unless the pack provides its material - an ingot, gem, dust or the ore's own smelting "
+                + "target somewhere in the ore dictionary. Such an ore gets no chunk name, no icon, no ore dictionary "
+                + "entry, no recipe, no creative tab entry and no world generation, and mining another mod's ore of "
+                + "that type is left alone: a chunk that cannot be smelted into anything is a dead end, and handing "
+                + "one out in place of a working ore drop would break the mod that ore came from. This is what keeps "
+                + "'every ore enabled' cheap - a plain Forge pack ends up with the vanilla materials and nothing else. "
+                + "Turn off only if you want the chunks of materials your pack does not have.")
             .getBoolean(true);
 
         // ---- World generation master switches ----------------------------------------------------------------------
@@ -97,7 +57,8 @@ public class Config {
             "etfuturum:deepslate",
             "Registry id (modid:name) of the deepslate block that hosts the deepslate ore variants (Et Futurum Requiem). "
                 + "You may list several comma-separated candidates (e.g. 'etfuturum:deepslate,quark:deepslate'); the "
-                + "first one that exists is used. If none is present, only stone-hosted ores generate.")
+                + "first one that exists is used. If no listed mod is installed, the deepslate ore blocks are not "
+                + "registered at all and only stone-hosted ores generate; leave the value empty to skip them outright.")
             .getString();
         FortuneOres.deepslateMaxY = config.get(
             "AAAGeneral",
@@ -131,16 +92,48 @@ public class Config {
                     + "profit. An ore block (silk touch) pays this times its BaseDrop, so processing the chunks a "
                     + "mined block drops is never worse than processing the block - that route still gets Fortune.")
                 .getInt());
+        FortuneOres.tinkersIntegration = config.get(
+            "AAAGeneral",
+            "TinkersSmelteryIntegration",
+            true,
+            "Let the ore chunks and the ore blocks melt in Tinkers' Construct's smeltery, into the molten fluid of "
+                + "their own material. Tinkers only sets melting up for its own material list, so without this every "
+                + "chunk outside iron/gold/copper/tin/... is not a smeltery input at all. The fluid is whatever the "
+                + "pack registered for the material (iron.molten, molten.iron, ...), the melting point is the one "
+                + "Tinkers itself uses for it, and an input Tinkers already melts is left untouched. A chunk is worth "
+                + "MachineOutputMultiplier ingots of fluid, an ore block that times its BaseDrop. Materials with no "
+                + "molten form in the pack (most gems) are simply skipped. Has no effect without Tinkers' Construct.")
+            .getBoolean(true);
+        FortuneOres.thaumcraftIntegration = config.get(
+            "AAAGeneral",
+            "ThaumcraftAspectIntegration",
+            true,
+            "Give the ore chunks and the ore blocks Thaumcraft aspects, so they can be scanned, put into a crucible "
+                + "and spent on an infusion like any other ore. Thaumcraft works aspects out from an item's crafting "
+                + "recipe and a chunk has none, so without this a chunk is aspect-less no matter what it is made of. "
+                + "The aspects are those of what the chunk smelts into plus terra for the rock, falling back to "
+                + "metallum/vitreus for a material Thaumcraft does not know. Has no effect without Thaumcraft.")
+            .getBoolean(true);
+        FortuneOres.oreDictTooltips = config.get(
+            "AAAGeneral",
+            "OreDictionaryTooltips",
+            false,
+            "Add an item's ore dictionary names to its advanced tooltip (F3+H). This is a debugging aid and it applies "
+                + "to every item in the pack, not only this mod's, which is why it is off by default - NEI and most "
+                + "inspection mods already show the same information on request. Turn on to see at a glance which "
+                + "names an ore chunk carries.")
+            .getBoolean(false);
 
         readForeignOreBlocks(config);
 
         // Every ore's drop/smelt AND world-gen settings live together in its own config category (the ore name).
         for (Ore ore : FortuneOres.oreStorage) {
             String cat = ore.name;
-            // Defaults: the ores in DEFAULT_REPLACE are fully replaced, everything else stays off until enabled.
-            String key = ore.name.toLowerCase();
-            boolean defaultReplace = DEFAULT_REPLACE.contains(key);
-            boolean defaultRaw = defaultReplace || DEFAULT_RAW_ONLY.contains(key);
+            // Defaults: every ore is a raw ore, nothing generates. RequireRegisteredMaterial then throws out whatever
+            // the pack has no material for, which is what keeps the wide default from registering a hundred unusable
+            // materials.
+            boolean defaultRaw = true;
+            boolean defaultReplace = false;
             // Two independent switches decide how this ore is handled:
             // - EnableRawOre: mining a matching ore block (this mod's, vanilla, or another mod's) drops this mod's
             // chunk. Turn this on to keep foreign ores in the world but harvest chunks from them.
@@ -153,7 +146,9 @@ public class Config {
                     defaultRaw,
                     "Turn a mined " + ore.name
                         + " ore block (this mod's, vanilla, or from another mod) into this mod's chunk. Enable to keep "
-                        + "other mods' ores in the world while still harvesting chunks from them.")
+                        + "other mods' ores in the world while still harvesting chunks from them. With this and "
+                        + "EnableOreGen both off the ore leaves the game entirely: its chunk gets no ore dictionary "
+                        + "entry, no smelting recipe, no machine recipe, no icon and no place in the creative tab.")
                 .getBoolean(defaultRaw);
             ore.enableOreGen = config.get(
                 cat,
@@ -163,35 +158,55 @@ public class Config {
                     + " ore block in the world AND suppress the same ore type from Minecraft and every other mod (full "
                     + "replacement). Leave off to keep foreign "
                     + ore.name
-                    + " ore generation untouched.")
+                    + " ore generation untouched - the ore block is then not registered at all, and neither are the "
+                    + "host variants (stone/deepslate/netherrack/end stone) no enabled ore generates in. Ore blocks "
+                    + "already generated in an existing world disappear once their block is no longer registered.")
                 .getBoolean(defaultReplace);
             // Derived: the chunk is 'active' (registered, ore-dicted and smeltable) when either switch is on.
             ore.enabled = ore.enableRawOre || ore.enableOreGen;
             // BaseDrop is the minimum chunk drop; BaseDropMax adds an upper bound for a random range (e.g. 4-8 for
             // redstone/lapis). SmeltCount multiplies the furnace output per chunk. Defaults come from setupOres().
-            ore.dropCount = config.get(cat, "BaseDrop", ore.dropCount)
-                .getInt();
-            ore.dropCountMax = config.get(cat, "BaseDropMax", Math.max(ore.dropCount, ore.dropCountMax))
-                .getInt();
-            ore.smeltCount = config.get(cat, "SmeltCount", ore.smeltCount)
-                .getInt();
+            ore.dropCount = Math.max(
+                0,
+                config.get(cat, "BaseDrop", ore.dropCount)
+                    .getInt());
+            // Never below BaseDrop: the drop roll is a uniform range, and an inverted one would silently pay out the
+            // minimum for ever.
+            ore.dropCountMax = Math.max(
+                ore.dropCount,
+                config.get(cat, "BaseDropMax", Math.max(ore.dropCount, ore.dropCountMax))
+                    .getInt());
+            // A furnace recipe has to hand out at least one item, or there is no recipe.
+            ore.smeltCount = Math.max(
+                1,
+                config.get(cat, "SmeltCount", ore.smeltCount)
+                    .getInt());
 
             // World generation shape. These knobs only matter when EnableOreGen is on. Defaults are seeded per rarity
             // (see OreRarity) and can all be overridden here.
-            ore.minY = config.get(cat, "OreMinY", ore.minY)
-                .getInt();
-            ore.maxY = config.get(cat, "OreMaxY", ore.maxY)
-                .getInt();
-            ore.veinSize = config.get(
-                cat,
-                "OreVeinSize",
-                ore.veinSize,
-                "Upper bound on one " + ore.name
-                    + " vein. It feeds the same ellipsoid vanilla uses, so it is a bound rather than an exact count: "
-                    + "12 lands roughly 6-12 blocks, 6 lands 3-6 and 3 lands 1-2.")
-                .getInt();
-            ore.veinsPerChunk = config.get(cat, "OreVeinsPerChunk", ore.veinsPerChunk, "Vein attempts per chunk.")
-                .getInt();
+            ore.minY = clampHeight(
+                config.get(cat, "OreMinY", ore.minY)
+                    .getInt());
+            ore.maxY = Math.max(
+                ore.minY,
+                clampHeight(
+                    config.get(cat, "OreMaxY", ore.maxY)
+                        .getInt()));
+            // The vein shape divides by this, so zero would place a vein of NaN-sized nothing.
+            ore.veinSize = Math.max(
+                1,
+                config.get(
+                    cat,
+                    "OreVeinSize",
+                    ore.veinSize,
+                    "Upper bound on one " + ore.name
+                        + " vein. It feeds the same ellipsoid vanilla uses, so it is a bound rather than an exact count: "
+                        + "12 lands roughly 6-12 blocks, 6 lands 3-6 and 3 lands 1-2.")
+                    .getInt());
+            ore.veinsPerChunk = Math.max(
+                0,
+                config.get(cat, "OreVeinsPerChunk", ore.veinsPerChunk, "Vein attempts per chunk.")
+                    .getInt());
             ore.veinChance = clampPercent(
                 config.get(
                     cat,
@@ -217,12 +232,27 @@ public class Config {
                     cat,
                     "SpawnInOverworld",
                     true,
-                    "Generate " + ore.name + " ore in the Overworld (and modded " + "stone/deepslate dimensions).")
+                    "Generate " + ore.name
+                        + " ore in the Overworld (and modded stone/deepslate dimensions). Switched off for every ore, "
+                        + "the stone and deepslate ore blocks are not registered at all.")
                 .getBoolean(true);
             ore.spawnNether = config
-                .get(cat, "SpawnInNether", true, "Generate " + ore.name + " ore in the Nether (netherrack).")
+                .get(
+                    cat,
+                    "SpawnInNether",
+                    true,
+                    "Generate " + ore.name
+                        + " ore in the Nether (netherrack). Switched off for every ore, the netherrack ore blocks are "
+                        + "not registered at all.")
                 .getBoolean(true);
-            ore.spawnEnd = config.get(cat, "SpawnInEnd", true, "Generate " + ore.name + " ore in the End (end stone).")
+            ore.spawnEnd = config
+                .get(
+                    cat,
+                    "SpawnInEnd",
+                    true,
+                    "Generate " + ore.name
+                        + " ore in the End (end stone). Switched off for every ore, the end-stone ore blocks are not "
+                        + "registered at all.")
                 .getBoolean(true);
             ore.dimensionIds = config.get(
                 cat,
@@ -272,6 +302,13 @@ public class Config {
     private static int clampMultiplier(int value) {
         if (value < 1) return 1;
         if (value > 64) return 64;
+        return value;
+    }
+
+    /** Keeps a height inside the world; the generator reads nothing outside it and would place nothing there. */
+    private static int clampHeight(int value) {
+        if (value < 0) return 0;
+        if (value > 255) return 255;
         return value;
     }
 

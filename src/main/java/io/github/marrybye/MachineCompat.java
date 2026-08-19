@@ -22,7 +22,8 @@ import cpw.mods.fml.common.Loader;
  * iterates its {@code Resource} enum, Immersive Engineering its {@code addOreProcessingRecipe} list, Thermal Expansion
  * its metals - and only then looks the ore dictionary up for those few names. That is why registering the ore blocks as
  * {@code oreIron} is enough for iron (Mekanism's Enrichment Chamber picks the block up at its own post-init, since this
- * mod ore-dicts in init), while the hundred materials outside those lists - Rutile, Titanium, the Metallurgy metals,
+ * mod ore-dicts in pre-init), while the hundred materials outside those lists - Rutile, Titanium, the Metallurgy
+ * metals,
  * the gems - have no recipe in any machine at all. This class fills exactly that gap: for every enabled ore it
  * registers the doubling recipe into every supported machine that is installed.
  *
@@ -69,7 +70,7 @@ public final class MachineCompat {
         int recipes = 0;
         int materials = 0;
         for (Ore ore : FortuneOres.oreStorage) {
-            if (!ore.enabled) continue;
+            if (!ore.isActive()) continue;
 
             int added = registerOre(ore, machines);
             recipes += added;

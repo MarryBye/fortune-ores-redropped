@@ -54,24 +54,27 @@ public class OreSwapper {
      */
     protected static final HashMap<Block, DropStorage[]> blockMap = new HashMap<Block, DropStorage[]>();
 
-    private static boolean built;
-    private static volatile boolean blockMapBuilt;
+    private static volatile boolean built;
 
-    public OreSwapper() {
-        build();
+    /**
+     * Builds both lookup tables. Called from {@link FortuneOres#postInit}, once every mod has registered the ingots
+     * and gems that decide which ores have a material at all, and lazily from {@link #swapDrops} in case something
+     * manages to break a block even earlier. Idempotent.
+     */
+    public static synchronized void build() {
+        if (built) return;
+
+        buildDropMap();
+        buildBlockMap();
+        built = true;
     }
 
     /**
-     * Builds the lookup tables from the (config-populated) ore list. Idempotent; runs from {@link FortuneOres#init}
-     * before anything can break a block.
+     * Fills the ore-dictionary id table in two passes, because two ores may share a name: Rutile carries oreTitanium
+     * so it can be processed as titanium, but a mined titanium ore block still belongs to the Titanium ore. An ore's
+     * own names are claimed first and an alias only takes what is left, so the ore owning a name outright always wins.
      */
-    public static void build() {
-        if (built) return;
-        built = true;
-
-        // Two passes, because two ores may share an ore-dictionary name: Rutile carries oreTitanium so it can be
-        // processed as titanium, but a mined titanium ore block still belongs to the Titanium ore. An ore's own names
-        // are claimed first and an alias only takes what is left, so the ore owning a name outright always wins.
+    private static void buildDropMap() {
         for (Ore ore : FortuneOres.oreStorage) {
             if (!swappable(ore)) continue;
 
@@ -94,8 +97,9 @@ public class OreSwapper {
 
     /** Whether a mined block carrying this ore's names should be turned into its chunks at all. */
     private static boolean swappable(Ore ore) {
-        // Swapping mined ore drops to chunks is exactly the "raw ore" feature, gated per ore by EnableRawOre.
-        if (!ore.enableRawOre) return false;
+        // Swapping mined ore drops to chunks is exactly the "raw ore" feature, gated per ore by EnableRawOre - and by
+        // the pack having the material, since a chunk that smelts into nothing is worse than the ore drop it replaces.
+        if (!ore.swapsDrops()) return false;
 
         // Pure vanilla ores have no ore-dictionary names to swap; everything else is also matched via the ore dict.
         return !ore.isVanilla;
@@ -117,17 +121,12 @@ public class OreSwapper {
     }
 
     /**
-     * Builds the mined-block lookup table. Deferred to the first mined block rather than done in {@code init} so that
-     * every mod has finished registering its ore-dictionary entries by then - the same reason
-     * {@link OreGenSuppressor#buildBlockTable()} defers its own table.
+     * Builds the mined-block lookup table: everything an ore owns outright - its vanilla blocks, its own
+     * ore-dictionary names and the foreign blocks pinned to it by registry id.
      */
-    private static synchronized void buildBlockMap() {
-        if (blockMapBuilt) return;
-
-        // Everything an ore owns outright: its vanilla blocks, its own ore-dictionary names and the foreign blocks
-        // pinned to it by registry id.
+    private static void buildBlockMap() {
         for (Ore ore : FortuneOres.oreStorage) {
-            if (!ore.enableRawOre) continue;
+            if (!ore.swapsDrops()) continue;
 
             // Vanilla ore blocks (coal, diamond, ...) are not ore-dicted, and lit redstone ore is a block of its own.
             if (ore.vanillaBlocks != null) {
@@ -147,8 +146,6 @@ public class OreSwapper {
 
             markNamedBlocks(ore, true);
         }
-
-        blockMapBuilt = true;
     }
 
     /** Marks every block registered under the ore's own names ({@code aliases} false) or under its aliases (true). */
@@ -203,11 +200,11 @@ public class OreSwapper {
      *         been converted by the other entry point).
      */
     public static boolean swapDrops(Block block, int metadata, List<ItemStack> drops, int fortune, Random rand) {
-        if (!built || block == null || drops == null || drops.isEmpty()) return false;
+        if (block == null || drops == null || drops.isEmpty()) return false;
         // Our own ore blocks roll their chunk drops in BlockFortuneOre#getDrops; never touch them again.
         if (block instanceof BlockFortuneOre) return false;
 
-        if (!blockMapBuilt) buildBlockMap();
+        if (!built) build();
 
         // Already converted (the mixin runs before the harvest event) - nothing left to do.
         if (containsChunk(drops)) return false;
@@ -271,15 +268,19 @@ public class OreSwapper {
         return false;
     }
 
+    /**
+     * Lists an item's ore-dictionary names in its advanced tooltip. Off unless {@code OreDictionaryTooltips} asks for
+     * it: this fires for every item in the pack, not only this mod's, so it is a debugging aid rather than a feature.
+     */
     @SubscribeEvent
     public void OreDictTooltip(ItemTooltipEvent event) {
+        if (!FortuneOres.oreDictTooltips) return;
         if (!event.showAdvancedItemTooltips) return;
+        if (event.itemStack == null || event.itemStack.getItem() == null) return;
 
-        int[] oreIDs = OreDictionary.getOreIDs(event.itemStack);
-
-        if (oreIDs.length <= 0) return;
-
-        for (int i = 0; i < oreIDs.length; ++i) event.toolTip.add(OreDictionary.getOreName(oreIDs[i]));
+        for (int oreID : OreDictionary.getOreIDs(event.itemStack)) {
+            event.toolTip.add(OreDictionary.getOreName(oreID));
+        }
     }
 
     @SubscribeEvent
@@ -312,8 +313,13 @@ public class OreSwapper {
         Item blockItem = Item.getItemFromBlock(block);
         if (blockItem == null) return null;
 
-        entry = dropMap.get(OreDictionary.getOreID(new ItemStack(blockItem, 1, metadata)));
-        return entry != null ? entry.ore : null;
+        // Every name the block carries, not just the first one: a block registered as both oreCopper and oreTin-like
+        // aliases would otherwise be looked up under whichever name Forge happened to register first.
+        for (int id : OreDictionary.getOreIDs(new ItemStack(blockItem, 1, metadata))) {
+            entry = dropMap.get(Integer.valueOf(id));
+            if (entry != null) return entry.ore;
+        }
+        return null;
     }
 
     /** Grants the ore's configured mining XP for ores that, unlike the vanilla ones, drop no XP on their own. */

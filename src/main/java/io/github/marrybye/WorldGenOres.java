@@ -29,8 +29,8 @@ public class WorldGenOres implements IWorldGenerator {
         int dim = world.provider.dimensionId;
 
         for (Ore ore : FortuneOres.oreStorage) {
-            if (!ore.enableOreGen) continue;
-            if (!allowedInDimension(ore, dim)) continue;
+            if (!ore.generates()) continue;
+            if (!ore.allowsDimension(dim)) continue;
 
             int minY = ore.minYFor(dim);
             int span = Math.max(1, ore.maxYFor(dim) - minY + 1);
@@ -47,25 +47,6 @@ public class WorldGenOres implements IWorldGenerator {
                 generateVein(world, random, x, y, z, ore, ore.veinSize, dim);
             }
         }
-    }
-
-    /**
-     * Maps a dimension id onto the ore's per-dimension toggles: -1 is the Nether, 1 is the End, and everything else
-     * (the overworld plus modded stone/deepslate dimensions) uses the Overworld toggle. An ore with an explicit
-     * {@code DimensionIds} whitelist is matched against that instead. Host-aware placement then makes sure a vein only
-     * materialises where a matching terrain block actually exists.
-     */
-    private boolean allowedInDimension(Ore ore, int dim) {
-        if (ore.dimensionIds.length > 0) {
-            for (int id : ore.dimensionIds) {
-                if (id == dim) return true;
-            }
-            return false;
-        }
-
-        if (dim == -1) return ore.spawnNether;
-        if (dim == 1) return ore.spawnEnd;
-        return ore.spawnOverworld;
     }
 
     /**
@@ -127,9 +108,12 @@ public class WorldGenOres implements IWorldGenerator {
 
                         Block existing = world.getBlock(bx, by, bz);
                         OreHost host = (dim == -1 || dim == 1) ? hostFor(existing) : overworldHostFor(existing, by);
-                        if (host != null) {
-                            world.setBlock(bx, by, bz, host.blockFor(ore), offset, 2);
-                        }
+                        if (host == null) continue;
+
+                        // Null when this host's block was never registered - the ore does not generate in the
+                        // dimension the host belongs to, so it has no variant to place here.
+                        Block oreBlock = host.blockFor(ore);
+                        if (oreBlock != null) world.setBlock(bx, by, bz, oreBlock, offset, 2);
                     }
                 }
             }

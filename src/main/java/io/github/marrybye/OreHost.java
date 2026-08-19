@@ -31,7 +31,9 @@ public enum OreHost {
 
     /**
      * The blocks registered for this host, one per ore group (16 ores each); assigned in {@link FortuneOres#preInit}.
-     * The block holding a given ore is {@code groupBlocks[ore.meta / BlockFortuneOre.GROUP_SIZE]}.
+     * The block holding a given ore is {@code groupBlocks[ore.meta / BlockFortuneOre.GROUP_SIZE]}. Entries are
+     * {@code null} for the groups - and the whole array is null-filled for the hosts - that no enabled ore generates
+     * in: those blocks are never registered, see {@link FortuneOres#registerOreBlocks()}.
      */
     public Block[] groupBlocks;
 
@@ -40,9 +42,28 @@ public enum OreHost {
         this.registryName = registryName;
     }
 
-    /** The block that carries {@code ore} for this host. */
+    /**
+     * The block that carries {@code ore} for this host, or {@code null} when it was never registered - which is the
+     * case for every host and group no enabled ore generates in.
+     */
     public Block blockFor(Ore ore) {
-        return groupBlocks[ore.meta / BlockFortuneOre.GROUP_SIZE];
+        if (groupBlocks == null) return null;
+
+        int group = ore.meta / BlockFortuneOre.GROUP_SIZE;
+        if (group < 0 || group >= groupBlocks.length) return null;
+        return groupBlocks[group];
+    }
+
+    /** Icon standing in for the metadata values this host's blocks do not carry; see BlockFortuneOre#getIcon. */
+    public String fallbackTexture() {
+        switch (this) {
+            case NETHERRACK:
+                return "netherrack";
+            case ENDSTONE:
+                return "end_stone";
+            default:
+                return "stone";
+        }
     }
 
     /**

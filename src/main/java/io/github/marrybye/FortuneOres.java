@@ -6,16 +6,17 @@ import net.minecraft.block.Block;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.oredict.OreDictionary;
 
 import cpw.mods.fml.common.FMLLog;
+import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.Mod.EventHandler;
 import cpw.mods.fml.common.Mod.Instance;
+import cpw.mods.fml.common.ModContainer;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
@@ -66,7 +67,7 @@ public class FortuneOres {
     /** Also the resource domain: every asset lives under {@code assets/fortuneores/}. */
     public static final String MODID = "fortuneores";
     public static final String NAME = "Fortune Ores Redropped";
-    public static final String VERSION = "1.1.1";
+    public static final String VERSION = "1.2.0";
     // Mod Info End
 
     // Singleton
@@ -76,7 +77,7 @@ public class FortuneOres {
     public static ArrayList<Ore> oreStorage;
 
     public static CreativeTabs creativeTab;
-    public static Item itemChunk;
+    public static ItemChunk itemChunk;
 
     // Every ore now generates its own block. The concrete blocks live on the OreHost enum values (host.groupBlocks),
     // one block per group of 16 ores; oreGroupCount is how many groups (and therefore blocks per host) there are.
@@ -90,10 +91,23 @@ public class FortuneOres {
 
     public static boolean allowProcessing;
 
+    /**
+     * Drop every ore the pack has no material for. See {@link #hasMaterial} - the chunk of a material nothing provides
+     * could not be smelted into anything, so registering it (and swapping another mod's ore drops for it) is worse
+     * than leaving that ore alone.
+     */
+    public static boolean requireRegisteredMaterial;
+
     /** Register the chunks and ore blocks in the ore-processing machines of whichever tech mods are installed. */
     public static boolean techModIntegration;
     /** How many outputs one chunk is worth in those machines; 2 is the ore doubling every one of them is built on. */
     public static int machineOutputMultiplier;
+    /** Melt the chunks and ore blocks in Tinkers' Construct's smeltery; see {@link TinkersCompat}. */
+    public static boolean tinkersIntegration;
+    /** Give the chunks and ore blocks Thaumcraft aspects; see {@link ThaumcraftCompat}. */
+    public static boolean thaumcraftIntegration;
+    /** List an item's ore-dictionary names in its advanced tooltip - a debugging aid, off by default. */
+    public static boolean oreDictTooltips;
 
     /**
      * When on, an ore with EnableOreGen is also denied at block-placement level during chunk generation, which catches
@@ -120,31 +134,138 @@ public class FortuneOres {
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         config = new Config(new Configuration(event.getSuggestedConfigurationFile()));
+
+        // An ore the config switched off is not registered anywhere: no ore-dictionary entry, no smelting recipe, no
+        // icon on the atlas and no generated block. With every ore off the mod registers no content at all rather than
+        // an item and a creative tab that could only ever hold unusable stacks.
+        if (!anyOreEnabled()) {
+            FMLLog.info(
+                "[FortuneOres] Every ore is disabled in the config - no item, block or ore-dictionary entry is registered.");
+            return;
+        }
+
         creativeTab = new CTabChunks(CreativeTabs.getNextID(), "OreChunks");
         itemChunk = new ItemChunk();
         GameRegistry.registerItem(itemChunk, "oreChunk");
 
+        registerOreBlocks();
+    }
+
+    /** True when at least one ore survived the config, i.e. the mod has any content to register at all. */
+    public static boolean anyOreEnabled() {
+        for (Ore ore : oreStorage) {
+            if (ore.enabled) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Registers the generated ore blocks, leaving out everything nothing can ever place. A host whose dimension no
+     * enabled ore generates in is skipped whole - an Overworld-only pack therefore never pays for the netherrack and
+     * end-stone variants - and within a host only the groups actually holding such an ore are registered. What is left
+     * out stays {@code null} in {@link OreHost#groupBlocks}, which every caller reads as "this variant does not exist".
+     *
+     * <p>
+     * A block that is not registered cannot be loaded from a save either, so switching an ore (or a whole dimension)
+     * off in an existing world drops the ore blocks already generated there, exactly like removing a mod would.
+     */
+    private void registerOreBlocks() {
         oreGroupCount = (oreStorage.size() + BlockFortuneOre.GROUP_SIZE - 1) / BlockFortuneOre.GROUP_SIZE;
+
+        boolean deepslateAvailable = deepslateHostAvailable();
+        int registered = 0;
+
         for (OreHost host : OreHost.values()) {
             host.groupBlocks = new Block[oreGroupCount];
+            // The deepslate variants are hosted by another mod's block; without that mod they could never be placed.
+            if (host == OreHost.DEEPSLATE && !deepslateAvailable) continue;
+
             for (int g = 0; g < oreGroupCount; g++) {
+                if (!groupUsesHost(g, host)) continue;
+
                 Block block = new BlockFortuneOre(host, g);
                 host.groupBlocks[g] = block;
                 GameRegistry.registerBlock(block, ItemBlockFortuneOre.class, host.registryName + "_g" + g);
+                registered++;
             }
         }
 
-        MinecraftForge.EVENT_BUS.register(new OreDictHandler());
+        FMLLog.info(
+            "[FortuneOres] %d of %d ores enabled, %d of them generating; registered %d of %d possible ore blocks.",
+            countOres(false),
+            oreStorage.size(),
+            countOres(true),
+            registered,
+            OreHost.values().length * oreGroupCount);
+    }
+
+    /** How many ores are enabled ({@code generatingOnly} false) or generate their own block (true). */
+    private static int countOres(boolean generatingOnly) {
+        int count = 0;
+        for (Ore ore : oreStorage) {
+            if (generatingOnly ? ore.enableOreGen : ore.enabled) count++;
+        }
+        return count;
+    }
+
+    /** Whether any ore in this group of 16 generates in a dimension the given host covers. */
+    private static boolean groupUsesHost(int group, OreHost host) {
+        int first = group * BlockFortuneOre.GROUP_SIZE;
+        int last = Math.min(first + BlockFortuneOre.GROUP_SIZE, oreStorage.size());
+        for (int i = first; i < last; i++) {
+            if (oreStorage.get(i)
+                .usesHost(host)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Whether the deepslate variants are worth registering: the config has to name a deepslate block and the mod
+     * providing it has to be installed. The block itself can only be looked up in {@link #init} - registries are still
+     * filling up during pre-init - but a registry id's domain is the id of the mod that registered it, and the mod list
+     * is complete well before pre-init, so a pack without a deepslate mod never registers a deepslate ore block.
+     */
+    private static boolean deepslateHostAvailable() {
+        if (deepslateBlockId == null || deepslateBlockId.isEmpty()) return false;
+
+        for (String candidate : deepslateBlockId.split(",")) {
+            candidate = candidate.trim();
+            int sep = candidate.indexOf(':');
+            if (sep <= 0) continue;
+            if (modLoaded(candidate.substring(0, sep))) return true;
+        }
+
+        FMLLog.info(
+            "[FortuneOres] No installed mod provides '%s' - the deepslate ore blocks are not registered.",
+            deepslateBlockId);
+        return false;
+    }
+
+    /** {@link Loader#isModLoaded} ignoring case, plus "minecraft" for the vanilla domain. */
+    private static boolean modLoaded(String domain) {
+        if (domain.equalsIgnoreCase("minecraft")) return true;
+
+        for (ModContainer mod : Loader.instance()
+            .getActiveModList()) {
+            if (mod.getModId()
+                .equalsIgnoreCase(domain)) return true;
+        }
+        return false;
     }
 
     @EventHandler
     public void init(FMLInitializationEvent event) {
+        // Nothing was registered in pre-init, so there is nothing to resolve, generate or suppress.
+        if (itemChunk == null) return;
+
+        // Which materials the pack actually has can only be answered now: the ore dictionary is filled during every
+        // mod's pre-init, and everything below - ore-dicting, drops, world generation - depends on the answer.
+        resolveMaterials();
         addOreDicting();
         addBlockOreDicting();
+        warnAboutUnnamedOres();
         // Every mod has registered its blocks by now, so the "modid:name[:meta]" ore blocks can be looked up.
         resolveForeignBlocks();
-        // Builds the drop-swap tables that both the harvest event and the Block#getDrops mixin read.
-        OreSwapper.build();
         MinecraftForge.EVENT_BUS.register(new OreSwapper());
 
         deepslateBlock = resolveBlock(deepslateBlockId);
@@ -170,7 +291,7 @@ public class FortuneOres {
      */
     private void resolveForeignBlocks() {
         for (Ore ore : oreStorage) {
-            if (!ore.enabled) continue;
+            if (!ore.isActive()) continue;
 
             for (String blockId : ore.foreignBlockIds) {
                 ForeignOreBlock resolved = ForeignOreBlock.resolve(blockId);
@@ -206,9 +327,104 @@ public class FortuneOres {
 
     @EventHandler
     public void postInit(FMLPostInitializationEvent event) {
+        if (itemChunk == null) return;
+
+        // A mod may only have registered its ingots and gems in init, so the ores that found nothing get a second
+        // chance before the smelting recipes, the drop tables and the icons are built on the answer.
+        if (resolveMaterials() > 0) {
+            addOreDicting();
+            addBlockOreDicting();
+        }
+        // The chunk names were built in pre-init, when every enabled ore still counted as having its material.
+        itemChunk.createNames();
+        verifyChunkOreDict();
+        logMaterialSummary();
+
         addSmelting();
+        // Builds the drop-swap tables that both the harvest event and the Block#getDrops mixin read. Here rather than
+        // in init so they see the final materials; they also build themselves lazily, should anything manage to break
+        // a block before this point.
+        OreSwapper.build();
         // Late enough that every mod has registered its dusts, gems and machine recipes; see MachineCompat.
         MachineCompat.register();
+        // Same reason, plus: Tinkers has to have registered its fluids and Thaumcraft its own aspects first.
+        TinkersCompat.register();
+        ThaumcraftCompat.register();
+    }
+
+    /**
+     * Works out which enabled ores this pack can actually use, and returns how many of them found their material only
+     * now. Called twice - in init, where the answer decides what gets ore-dicted, and again in post-init to pick up
+     * the mods that register their ingots and gems late. An ore never loses its material once found, so the second
+     * pass can only add.
+     */
+    private int resolveMaterials() {
+        if (!requireRegisteredMaterial) return 0;
+
+        int found = 0;
+        for (Ore ore : oreStorage) {
+            boolean present = ore.enabled && hasMaterial(ore);
+            if (present && !ore.materialFound) found++;
+            ore.materialFound = present;
+        }
+        return found;
+    }
+
+    /**
+     * Whether the pack provides this ore's material at all: a vanilla ore always does, and every other ore does when
+     * its chunk resolves to something - one of its explicit smelting targets, an ingot, a gem or a dust. That is
+     * deliberately the same question {@link #resolveSmeltResult} answers, because a chunk that smelts into nothing is
+     * a dead end no matter how it was obtained.
+     */
+    private static boolean hasMaterial(Ore ore) {
+        if (ore.isVanilla) return ore.vanillaSmeltResult != null;
+
+        return resolveSmeltResult(ore) != null;
+    }
+
+    /** One line saying what the pack ended up with, since "my ore is missing" is otherwise hard to explain. */
+    private void logMaterialSummary() {
+        StringBuilder dropped = new StringBuilder();
+        int active = 0;
+        int generating = 0;
+        int off = 0;
+
+        for (Ore ore : oreStorage) {
+            if (!ore.enabled) {
+                off++;
+                continue;
+            }
+            if (!ore.materialFound) {
+                if (dropped.length() > 0) dropped.append(", ");
+                dropped.append(ore.name);
+                continue;
+            }
+            active++;
+            if (ore.enableOreGen) generating++;
+        }
+
+        FMLLog.info(
+            "[FortuneOres] %d ores active (%d generating their own block), %d switched off in the config, "
+                + "%d dropped for lack of a material in this pack.",
+            active,
+            generating,
+            off,
+            oreStorage.size() - active - off);
+        if (dropped.length() > 0) {
+            FMLLog.info("[FortuneOres] No material in this pack, so nothing was registered for: %s.", dropped);
+        }
+    }
+
+    /**
+     * An ore without an ore-dictionary name would be invisible to every other mod (and to this mod's own suppressor).
+     * Anything reported here is a missing addOreName in {@code setupOres()}.
+     */
+    private void warnAboutUnnamedOres() {
+        for (Ore ore : oreStorage) {
+            if (ore.isActive() && ore.oreNames.isEmpty()) {
+                FMLLog.severe("[FortuneOres] Ore '%s' has no ore-dictionary name and stays untagged.", ore.name);
+            }
+        }
     }
 
     public void addUniversalOre(String oreName, OreRarity rarity, String... customSmeltTargets) {
@@ -374,9 +590,9 @@ public class FortuneOres {
     }
 
     /**
-     * The mod's ore catalogue. Only a fraction of it is enabled out of the box (see {@code Config.DEFAULT_REPLACE});
-     * the rest waits for the player to switch it on, which is why every ore still carries a full set of world-gen
-     * defaults.
+     * The mod's ore catalogue. Every entry ships on as a raw ore and off as a world generator (see {@link Config}),
+     * and an ore whose material the pack does not provide drops out on its own, which is why every ore carries a full
+     * set of world-gen defaults for the day a player switches its generation on.
      *
      * <p>
      * The shipped balance: the ores a modpack's progression is built on (coal, iron, copper, tin, aluminium, osmium,
@@ -716,25 +932,51 @@ public class FortuneOres {
         setEndHeight(40, 75);
     }
 
+    /**
+     * Ore-dicts every enabled ore's chunk. Unconditional on purpose: a chunk is the ore's raw form whether or not some
+     * other mod happens to provide the same material, and this mod generates the ore block itself, so a pack where
+     * nothing else registers "oreCopper" still needs the copper chunk under that name. Nothing here waits on another
+     * mod, so a pack's load order cannot leave a chunk untagged.
+     */
     private void addOreDicting() {
         for (Ore ore : oreStorage) {
-            boolean doOreDict = ore.enabled;
-
-            boolean matched = false;
-            for (String oreDict : ore.oreNames) {
-                if (!(OreDictionary.getOres(oreDict)
-                    .isEmpty())) matched = true;
-            }
-
-            if (!matched) doOreDict = false;
-
-            if (doOreDict) {
-                ItemStack chunk = new ItemStack(itemChunk, 1, ore.meta);
-                for (String oreName : ore.oreNames) {
-                    if (!oreName.contains("Nether")) registerOreOnce(oreName, chunk);
-                }
-            }
+            registerChunkOreDict(ore);
         }
+    }
+
+    /**
+     * Registers an enabled ore's chunk under every ore-dictionary name the ore owns, aliases included, so a chunk is
+     * interchangeable with the ore it came from no matter which spelling a mod expects (oreAluminum/oreAluminium,
+     * oreMithril/oreMythril). With {@code AllowProcessing} off the chunk takes the pack's {@code dust*} names instead,
+     * under exactly the same material names. Idempotent through {@link Ore#oreDicted}.
+     */
+    static void registerChunkOreDict(Ore ore) {
+        if (ore.oreDicted) return;
+        ore.oreDicted = true;
+
+        if (!ore.isActive() || itemChunk == null) return;
+
+        ItemStack chunk = new ItemStack(itemChunk, 1, ore.meta);
+        String prefix = allowProcessing ? "ore" : "dust";
+        for (String oreName : ore.oreNames) {
+            String material = oreMaterial(oreName);
+            if (material == null) continue;
+
+            registerOreOnce(prefix + material, chunk);
+        }
+    }
+
+    /**
+     * The material inside an {@code "ore*"} entry, or null for the variants a chunk must not be registered under: the
+     * legacy {@code oreNether*} and the {@code oreDense*} names both mean "this ore, but paying double", which a
+     * machine reading them would hand out for free. Only the prefix is stripped - "ore" also occurs inside material
+     * names (oreFluorite), so replacing every occurrence would mangle them.
+     */
+    static String oreMaterial(String oreName) {
+        if (oreName == null || !oreName.startsWith("ore")) return null;
+        if (oreName.startsWith("oreNether") || oreName.startsWith("oreDense")) return null;
+
+        return oreName.substring("ore".length());
     }
 
     /**
@@ -753,14 +995,9 @@ public class FortuneOres {
      */
     private void addBlockOreDicting() {
         for (Ore ore : oreStorage) {
-            if (!ore.enabled) continue;
-
-            // No ore may ship without an ore-dictionary name: it would be invisible to every other mod (and to this
-            // mod's own suppressor). Anything reaching this is a missing addOreName in setupOres().
-            if (ore.oreNames.isEmpty()) {
-                FMLLog.severe("[FortuneOres] Ore '%s' has no ore-dictionary name and stays untagged.", ore.name);
-                continue;
-            }
+            if (!ore.isActive()) continue;
+            // Reported once by warnAboutUnnamedOres; this method runs again when a material turns up late.
+            if (ore.oreNames.isEmpty()) continue;
 
             int offset = ore.meta % BlockFortuneOre.GROUP_SIZE;
             for (String oreName : ore.oreNames) {
@@ -785,16 +1022,66 @@ public class FortuneOres {
 
     /**
      * Registers {@code stack} under an ore-dictionary name unless that exact item and metadata is already registered
-     * there. Two paths ore-dict the chunks - {@link #addOreDicting()} and {@link OreDictHandler}, which fires again for
-     * every name {@link #addBlockOreDicting()} registers - and Forge's own {@code registerOre} does not deduplicate, so
-     * without this the same name is listed twice on the item.
+     * there. Forge's own {@code registerOre} does not deduplicate, and one name is reached from several places - the
+     * chunk in {@link #addOreDicting()}, the four host blocks in {@link #addBlockOreDicting()}, and any of the aliases
+     * two ores may share - so without this an item can end up listed twice under the same name.
      */
     public static void registerOreOnce(String oreName, ItemStack stack) {
+        if (isRegistered(oreName, stack)) return;
+
+        OreDictionary.registerOre(oreName, stack);
+    }
+
+    /** Whether this exact item and metadata is already listed under {@code oreName}. */
+    static boolean isRegistered(String oreName, ItemStack stack) {
         for (ItemStack existing : OreDictionary.getOres(oreName)) {
             if (existing == null) continue;
-            if (existing.getItem() == stack.getItem() && existing.getItemDamage() == stack.getItemDamage()) return;
+            if (existing.getItem() == stack.getItem() && existing.getItemDamage() == stack.getItemDamage()) return true;
         }
-        OreDictionary.registerOre(oreName, stack);
+        return false;
+    }
+
+    /**
+     * Checks that every enabled ore's chunk really ended up under the ore-dictionary names it is supposed to carry.
+     * Those names are the only thing another mod can recognise a chunk by, so a missing one silently makes the material
+     * unusable in every recipe, machine and scanner in the pack - worth a loud line in the log rather than a bug report
+     * about a chunk "no machine accepts". Anything reported here is either an ore left without a name in
+     * {@code setupOres()} or an ore-dictionary entry a later mod replaced.
+     */
+    private void verifyChunkOreDict() {
+        String prefix = allowProcessing ? "ore" : "dust";
+        int chunks = 0;
+        int names = 0;
+
+        for (Ore ore : oreStorage) {
+            if (!ore.isActive()) continue;
+
+            boolean tagged = false;
+            for (String oreName : ore.oreNames) {
+                String material = oreMaterial(oreName);
+                if (material == null) continue;
+
+                if (isRegistered(prefix + material, new ItemStack(itemChunk, 1, ore.meta))) {
+                    tagged = true;
+                    names++;
+                } else {
+                    FMLLog.severe(
+                        "[FortuneOres] The %s chunk is missing its '%s' ore dictionary entry.",
+                        ore.name,
+                        prefix + material);
+                }
+            }
+
+            if (tagged) {
+                chunks++;
+            } else {
+                FMLLog.severe(
+                    "[FortuneOres] The %s chunk carries no ore dictionary name - no other mod can recognise it.",
+                    ore.name);
+            }
+        }
+
+        FMLLog.info("[FortuneOres] %d ore chunks registered under %d '%s*' names.", chunks, names, prefix);
     }
 
     /**
@@ -809,7 +1096,7 @@ public class FortuneOres {
      * among the ore's explicit smelting targets, and finally its name (and aliases) run through
      * {@link #SMELT_PREFIXES}. Always returns a copy so callers can freely set the stack size.
      */
-    private ItemStack resolveSmeltResult(Ore ore) {
+    static ItemStack resolveSmeltResult(Ore ore) {
         if (ore.isVanilla) {
             return ore.vanillaSmeltResult != null ? ore.vanillaSmeltResult.copy() : null;
         }
@@ -850,7 +1137,7 @@ public class FortuneOres {
 
     private void addSmelting() {
         for (Ore ore : oreStorage) {
-            if (!ore.enabled) continue;
+            if (!ore.isActive()) continue;
 
             ItemStack smeltResult = resolveSmeltResult(ore);
             if (smeltResult != null) {
@@ -862,7 +1149,7 @@ public class FortuneOres {
 
         // Silk-touched ore blocks smelt straight into a single result item, like vanilla ore blocks do.
         for (Ore ore : oreStorage) {
-            if (!ore.enabled) continue;
+            if (!ore.isActive()) continue;
 
             ItemStack result = resolveSmeltResult(ore);
             if (result == null) continue;
@@ -870,7 +1157,10 @@ public class FortuneOres {
 
             int offset = ore.meta % BlockFortuneOre.GROUP_SIZE;
             for (OreHost host : OreHost.values()) {
-                GameRegistry.addSmelting(new ItemStack(host.blockFor(ore), 1, offset), result.copy(), ore.xpSmelt);
+                Block block = host.blockFor(ore);
+                if (block == null) continue;
+
+                GameRegistry.addSmelting(new ItemStack(block, 1, offset), result.copy(), ore.xpSmelt);
             }
         }
     }

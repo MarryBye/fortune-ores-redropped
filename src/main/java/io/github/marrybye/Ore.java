@@ -10,14 +10,25 @@ public class Ore {
     public String name;
     public String texture;
     public int meta;
-    /** Derived: {@code enableRawOre || enableOreGen}. Gates chunk registration, ore-dicting and smelting. */
+    /**
+     * Derived from the config: {@code enableRawOre || enableOreGen}. Says nothing about the pack having the material.
+     */
     public boolean enabled;
+    /**
+     * Whether this pack provides the material at all - resolved from the ore dictionary in
+     * {@code FortuneOres#resolveMaterials}, which can only run once every mod has filled it. Optimistically true until
+     * then, because the item and the ore blocks have to be registered in pre-init, before the answer is knowable.
+     */
+    public boolean materialFound = true;
 
     // ---- Handling switches ---------------------------------------------------------------------------------------
     /** Swap the drops of a matching mined ore block (this mod's, vanilla, or another mod's) to this ore's chunk. */
     public boolean enableRawOre = true;
-    /** Generate this mod's own ore block AND suppress the same ore type from Minecraft and every other mod. */
-    public boolean enableOreGen = true;
+    /**
+     * Generate this mod's own ore block AND suppress the same ore type from Minecraft and every other mod. Off by
+     * default: the shipped setup leaves the pack's own world generation alone and only turns its ores into chunks.
+     */
+    public boolean enableOreGen;
 
     // ---- World generation (every ore generates its own block when {@link #enableOreGen} is on) --------------------
     public int minY = 4;
@@ -68,6 +79,74 @@ public class Ore {
         if (dimensionId == -1 && netherMaxY >= 0) return netherMaxY;
         if (dimensionId == 1 && endMaxY >= 0) return endMaxY;
         return maxY;
+    }
+
+    /**
+     * The switch everything outside the config should read: the ore is enabled <em>and</em> the pack has its material.
+     * An ore whose material nothing provides is a dead end - its chunk could not be smelted, and swapping another
+     * mod's ore drops for an unsmeltable item would break that mod - so it is left out of the game entirely.
+     */
+    public boolean isActive() {
+        return enabled && materialFound;
+    }
+
+    /** Whether this ore generates its own block and suppresses the foreign ores of the same type. */
+    public boolean generates() {
+        return enableOreGen && materialFound;
+    }
+
+    /** Whether mining a matching foreign ore block should pay out this ore's chunks. */
+    public boolean swapsDrops() {
+        return enableRawOre && materialFound;
+    }
+
+    /**
+     * Whether this ore may generate in the given dimension. A non-empty {@link #dimensionIds} is an exact whitelist;
+     * otherwise -1 is the Nether, 1 the End and everything else - the Overworld plus every modded stone dimension -
+     * follows {@link #spawnOverworld}.
+     */
+    public boolean allowsDimension(int dimensionId) {
+        if (dimensionIds.length > 0) {
+            for (int id : dimensionIds) {
+                if (id == dimensionId) return true;
+            }
+            return false;
+        }
+
+        if (dimensionId == -1) return spawnNether;
+        if (dimensionId == 1) return spawnEnd;
+        return spawnOverworld;
+    }
+
+    /**
+     * Whether this ore's block is ever placed for the given host, which is what decides whether that block has to be
+     * registered at all: an ore generating nowhere - or nowhere but the Nether - leaves the other hosts' blocks
+     * unregistered instead of filling the block registry and the texture atlas with variants nothing can place. The
+     * stone and deepslate variants both follow the Overworld toggle, since the generator picks between the two by
+     * height rather than by dimension.
+     */
+    public boolean usesHost(OreHost host) {
+        if (!generates()) return false;
+
+        switch (host) {
+            case NETHERRACK:
+                return allowsDimension(-1);
+            case ENDSTONE:
+                return allowsDimension(1);
+            default:
+                return usesOverworldHosts();
+        }
+    }
+
+    /** True when this ore generates in any dimension the stone/deepslate variants host. */
+    private boolean usesOverworldHosts() {
+        if (dimensionIds.length > 0) {
+            for (int id : dimensionIds) {
+                if (id != -1 && id != 1) return true;
+            }
+            return false;
+        }
+        return spawnOverworld;
     }
 
     /** Lower bound of chunks dropped when the ore is mined (before Fortune). */
